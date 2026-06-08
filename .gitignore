@@ -1,0 +1,16 @@
+# codimango bench outputs
+jobs/
+
+# scratch notes
+AVOCADO_PROMPT_*.md
+*.tmp
+*~
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# OS
+.DS_Store
