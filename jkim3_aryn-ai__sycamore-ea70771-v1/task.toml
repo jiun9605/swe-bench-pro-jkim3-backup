@@ -1,0 +1,35 @@
+schema_version = "1.1"
+
+[task]
+name = "jkim3/aryn-ai__sycamore-ea70771-v1"
+description = ""
+authors = [{ name = "Jiun Kim", email = "jkim3@meta.com" }]
+keywords = ["python", "refactoring", "etl"]
+
+[metadata]
+author_name = "jkim3"
+author_email = "jkim3@meta.com"
+difficulty = "hard"
+category = "refactoring"
+tags = ["refactoring", "swe-bench-pro", "SWEBench-External", "python"]
+
+[verifier]
+timeout_sec = 3600.0
+
+[agent]
+timeout_sec = 3600.0
+
+[environment]
+build_timeout_sec = 3000.0
+cpus = 2
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+allow_internet = true
+mcp_servers = []
+
+[verifier.env]
+
+[environment.env]
+
+[solution.env]
