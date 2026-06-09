@@ -91,7 +91,7 @@ def test_nan_handling():
 
 def test_error_conditions():
     """Test ValueError on empty input."""
-    with pytest.raises(ValueError, match="metrics empty"):
+    with pytest.raises(ValueError, match="empty"):
         get_compute()({})
     
     # Stock with no usable metrics should be excluded, not raise

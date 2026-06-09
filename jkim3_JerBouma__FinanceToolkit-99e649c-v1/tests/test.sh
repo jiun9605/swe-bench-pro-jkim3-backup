@@ -41,6 +41,33 @@ patch = config.get('test_patch', '') or ''
 with open('$TEST_PATCH_FILE', 'w') as f:
     f.write(patch)
 " 2>/dev/null || { echo "ERROR: failed to extract test_patch"; exit 1; }
+# Force every grading test file to its gold state BEFORE applying test_patch.
+# An agent may have created or edited these paths (the instruction references the
+# behavior under test), which would make `git apply` fail with "already exists"
+# or let a doctored pass_to_pass spec slip through. We reset each fail_to_pass /
+# pass_to_pass file: restore it to base if tracked, remove it if the agent
+# created it untracked. Only test files are touched here — never the agent's
+# solution (financetoolkit/composite_scorecard.py lives in `patch`, not these).
+RESET_PATHS=$(python3 -c "
+import json
+with open('/tests/config.json') as f:
+    config = json.load(f)
+def files(key):
+    out=set()
+    val=config.get(key, []) or []
+    if isinstance(val, str):
+        try: val=json.loads(val)
+        except Exception: val=[]
+    for t in val:
+        out.add(t.split('::', 1)[0])
+    return out
+for p in sorted(files('fail_to_pass') | files('pass_to_pass')):
+    print(p)
+" 2>/dev/null)
+for p in $RESET_PATHS; do
+    git checkout -- "$p" 2>/dev/null || rm -f "$p" 2>/dev/null || true
+done
+
 if [ -s "$TEST_PATCH_FILE" ]; then
     echo "Applying test_patch from config.json"
     git apply --allow-empty "$TEST_PATCH_FILE" || { echo "ERROR: test_patch apply failed"; cat "$TEST_PATCH_FILE"; exit 1; }

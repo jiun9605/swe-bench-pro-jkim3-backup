@@ -1,7 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-cd /app 2>/dev/null || cd /testbed 2>/dev/null
+# The test harness (run_script.sh) and the test file both hardcode
+# /app/financetoolkit/composite_scorecard.py, and the Dockerfile pins
+# WORKDIR/clone to /app. Write there or fail loudly — a silent /testbed
+# fallback would land the module where the tests never look.
+cd /app
 
 cat > solution_patch.diff << '__SOLUTION__'
 diff --git a/financetoolkit/composite_scorecard.py b/financetoolkit/composite_scorecard.py

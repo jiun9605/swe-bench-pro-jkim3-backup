@@ -16,11 +16,14 @@ run_selected_tests() {
     echo "Running test: $test_file"
     # Strip ::test_name suffix for pytest file path
     test_path=$(echo "$test_file" | sed 's/::.*//')
-    # For our composite scorecard test, run directly to avoid conftest dependencies
+    # For our composite scorecard test, run directly to avoid conftest dependencies.
+    # Each branch runs in a subshell so a cd in one iteration cannot leak into the
+    # next (the composite branch cd's to / to resolve the hardcoded /app import;
+    # pass_to_pass specs must still run from /app via pytest).
     if [[ "$test_path" == *"test_composite_scorecard.py"* ]]; then
-      cd / && python "$test_path" || true
+      ( cd / && python "$test_path" ) || true
     else
-      uv run --frozen pytest "$test_path" -v --tb=short || true
+      ( cd /app && uv run --frozen pytest "$test_path" -v --tb=short ) || true
     fi
   done
 }
