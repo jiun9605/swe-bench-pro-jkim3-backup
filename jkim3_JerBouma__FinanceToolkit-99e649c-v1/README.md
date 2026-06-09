@@ -40,21 +40,22 @@ All tests run through the real package via `uv run --frozen pytest` from `/app`.
 
 ## Model Analysis
 
-`codimango bench run` on the redesigned (codebase-coupled) task, pooled across runs:
+Most recent `codimango bench run` per agent on the redesigned (codebase-coupled) task:
 
-| Agent | Model | Attempts | Pass rate | Failure nature |
-|-------|-------|----------|-----------|----------------|
-| oracle | oracle | 6 | 6/6 | — (gold patch; deterministic) |
-| metacode | meta/avocado_dvsc_tester | 5 | 4/5 | 1 genuine wrong-answer: treated a missing Z-Score as 0 points instead of dropping it and renormalizing, which mis-ranked the top observation |
-| claude-code | claude-opus-4-8 | 3 | 2/3 | timeout / agent-exit on the longer convergence |
-| claude-code | claude-sonnet-4-6 | 1 | 1/3 | mostly AgentTimeoutError — actively working (~47 tool calls/trial) but did not converge in budget |
+| Agent | Model | Attempts | Pass rate | Notes |
+|-------|-------|----------|-----------|-------|
+| oracle | oracle | 3 | 3/3 | Gold patch; deterministic. |
+| metacode | meta/avocado_dvsc_tester | 5 | 5/5 | Clean solve. |
+| claude-code | claude-opus-4-8 | 3 | 3/3 | Passes, but runs near the agent budget. |
+| claude-code | claude-sonnet-4-6 | 3 | 1/3 | 2 × AgentTimeoutError — actively working (~47 tool calls/trial) but did not converge in budget. |
 
 Difficulty: `medium`. The redesign moved the task from a self-contained algorithm
-(all solvers 3/3) to real multi-controller API navigation + pandas reshaping. Failures
-are a mix of one genuine correctness bug (avocado's renormalization-vs-zero handling of a
-missing metric) and convergence-time timeouts (sonnet); the agent timeout was raised to
-2700s to let the signal reflect correctness rather than clock speed. Platform measures
-difficulty empirically.
+(all solvers 3/3 in ~2 min) to real multi-controller API navigation + pandas reshaping;
+agents now spend 20-30 min exploring. Sonnet is the discriminator (1/3, timeouts). An
+earlier avocado run also surfaced a genuine correctness failure (treating a missing
+Z-Score as 0 instead of dropping it and renormalizing), confirming the task discriminates
+on correctness, not just convergence time. The agent timeout was raised to 2700s. Platform
+measures difficulty empirically.
 
 ## Notes / history
 
