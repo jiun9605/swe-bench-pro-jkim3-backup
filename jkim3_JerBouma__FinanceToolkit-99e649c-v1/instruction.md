@@ -10,7 +10,7 @@ The composite is the weighted sum of points using weights f_score 0.40, z_prime 
 
 Any value that is missing, `None`, or non-finite (NaN/Inf) is treated as absent: drop it from that stock's weighting and breakdown, and exclude it from every other stock's peer computation for that metric. Never raise for such values. A stock that ends up with no usable metrics is not ranked.
 
-Ordering must be fully deterministic, including when composites tie.
+Ordering must be fully deterministic: sort by composite descending, then by `f_score` descending, then by ticker ascending. A tied stock that is itself missing `f_score` is treated as `f_score = -1` for ordering purposes only.
 
 ## Return value
 

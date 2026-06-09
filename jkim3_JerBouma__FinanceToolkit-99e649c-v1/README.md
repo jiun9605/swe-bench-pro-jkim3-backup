@@ -1,60 +1,51 @@
 # FinanceToolkit Composite Ranking Scorecard — Task
 
-## Spec Status: ✅ AUTHOR SPEC PROVIDED
-
-Instruction.md now contains the full AUTHOR-owned spec with:
-- Module: `composite_scorecard.py`
-- API: `compute_composite_ranking(toolkit, tickers, period="annual") -> dict`
-- Metrics: f_score (Piotroski 9), z_prime (Altman Z' private), gross_margin, asset_turnover
-- Aggregation: peer-quartile tiered (0-3 points) with weights 0.40/0.30/0.15/0.15
-- Tie-break: composite desc, f_score desc, ticker asc
-- Missing-metric renormalization per report_card precedent
+Feature-addition task on JerBouma/FinanceToolkit, pinned to base commit
+`99e649ccd1f49614b6f4023f151bf2d783111943`. The solver implements a new standalone module
+`financetoolkit/composite_scorecard.py` exposing `compute_composite_ranking(metrics) -> dict`,
+which ranks stocks with a peer-quartile tiered scorecard over four pre-computed,
+higher-is-better metrics (`f_score`, `z_prime`, `gross_margin`, `asset_turnover`). No data
+fetching, no network — metrics are passed in.
 
 ## Files
 
-- `instruction.md` — ✅ full spec
-- `task.toml` — metadata
-- `environment/Dockerfile` — python:3.12 + uv, TODO base commit
-- `solution/solve.sh` — placeholder patch (needs gold implementation)
-- `tests/config.json` — updated with test names, TODO base commit and patches
-- `tests/` — parser, runner, test.sh ready; fixtures dir created
+- `instruction.md` — task spec (return contract with exact keys; tie-break precedence stated).
+- `solution/solve.sh` — oracle: applies the gold module patch under `/app`.
+- `tests/config.json` — grading contract (patch, test_patch, fail_to_pass, pass_to_pass, ...).
+- `tests/test_composite_scorecard.py` — gold tests (delivered via `test_patch`).
+- `tests/{test.sh,run_script.sh,parser.py}` — verifier entrypoint, runner, output parser.
+- `environment/Dockerfile` — python:3.12-slim + uv; clones repo, syncs deps, resets to base.
+- `task_spec_quality_analysis.md` — review notes from `/review-task`.
 
-## TODO — Remaining Before Avocado
+## Tests
 
-### 3. Create fixtures
-Small synthetic CSVs under `tests/fixtures/` for N stocks with:
-- One missing metric
-- One NaN / zero-denominator
-- Deliberate tie
+- fail_to_pass (5): `tests/test_composite_scorecard.py::` test_composite_ranking_basic,
+  test_missing_metric_exclusion, test_tie_breaking, test_nan_handling, test_error_conditions.
+  Assert exact composite (2.55), tier_points, renormalized weights (0.4/0.85),
+  excluded-metric absence, sole-holder->3, deterministic tie-break, NaN/None as missing,
+  ValueError on empty, and non-empty exclusion reason.
+- pass_to_pass (12): `tests/models/test_piotroski_model.py::*` — pre-existing repo tests
+  (Piotroski F-Score domain) as a regression guard that also exercises the real package
+  build via `uv run --frozen pytest`.
 
-### 4. Write tests
-Create `tests/test_<module>.py` with fail_to_pass tests asserting:
-- Exact ranking order
-- Composite values
-- Edge rules
-Must FAIL at base_commit, PASS after implementation.
+## Model Analysis
 
-### 5. Choose pass_to_pass
-Pick existing green tests from `tests/ratios` and `tests/models` as regression guard. Update `tests/config.json`.
+Local `codimango bench run` results after spec/harness fixes:
 
-### 6. Implement reference solution
-Write the ~30-80 LOC implementation per spec. Generate gold patch:
-```bash
-git diff > solution.patch
-```
-Update `solution/solve.sh` and `tests/config.json` patch field.
+| Agent | Model | Attempts | Pass rate | Notes |
+|-------|-------|----------|-----------|-------|
+| oracle | oracle | 3 | 3/3 | Gold patch; deterministic. |
+| claude-code | claude-sonnet-4-6 | 3 | 3/3 | Clean solve. |
+| claude-code | claude-opus-4-8 | 3 | 3/3 | Clean solve. |
+| metacode | meta/avocado_dvsc_tester | 5 | 0/5 (invalid) | Not a task signal — agent failed to install/run locally (AgentInstallError / NonZeroAgentExitCodeError); agent never produced a solution, so only the 12 pass_to_pass passed. Re-run needs a working metacode dist (--mount/--metacode-version). |
 
-### 7. Generate test_patch
-```bash
-git diff > test_patch.diff  # for new test files
-```
-Update `tests/config.json` test_patch field.
+Difficulty: easy. Every working solver passes 3/3; `task.toml` is set to `difficulty = "easy"`.
 
-### 8. Validate
-- Oracle passes 3/3
-- Without solution, fail_to_pass fails, pass_to_pass passes
-- No network, deterministic
-- Run provenance checks
+## Notes / history
 
-## Next Command
-After filling AUTHOR-owned spec, hand to avocado with prompt from plan.md §7.
+Earlier spurious failures were diagnosed and fixed, not difficulty: an agent-created test file
+collided with `test_patch` apply (hardened `tests/test.sh` to reset test paths to gold first);
+a brittle exact-error-message assertion (relaxed to `match="empty"`); a `run_script.sh` cwd
+leak between tests (subshell-isolated); and a missing tie-break precedence in the spec
+(restored). The module is intentionally self-contained (stdlib only), graded by importing it
+directly from `/app`.

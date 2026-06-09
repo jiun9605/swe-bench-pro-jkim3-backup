@@ -58,6 +58,10 @@ def test_missing_metric_exclusion():
     # Weights should be renormalized: 0.4/0.85, 0.3/0.85, 0.15/0.85
     assert fff["weights_applied"]["f_score"] == pytest.approx(0.4 / 0.85, abs=1e-9)
     assert abs(sum(fff["weights_applied"].values()) - 1.0) < 1e-9
+    # Excluded metric must be absent from tier_points, not present as None
+    assert "gross_margin" not in fff["tier_points"]
+    # AAA is the sole holder of gross_margin (FFF lacks it) -> sole-holder scores 3
+    assert result["scores"]["AAA"]["tier_points"]["gross_margin"] == 3
 
 
 def test_tie_breaking():
@@ -101,6 +105,9 @@ def test_error_conditions():
     })
     assert len(result["excluded_stocks"]) == 1
     assert result["excluded_stocks"][0]["ticker"] == "BAD"
+    # Excluded stock must carry a non-empty reason string
+    assert isinstance(result["excluded_stocks"][0]["reason"], str)
+    assert result["excluded_stocks"][0]["reason"]
 
 
 if __name__ == "__main__":
