@@ -37,7 +37,7 @@ Local `codimango bench run` results after spec/harness fixes:
 | oracle | oracle | 3 | 3/3 | Gold patch; deterministic. |
 | claude-code | claude-sonnet-4-6 | 3 | 3/3 | Clean solve. |
 | claude-code | claude-opus-4-8 | 3 | 3/3 | Clean solve. |
-| metacode | meta/avocado_dvsc_tester | 5 | 0/5 (invalid) | Not a task signal — agent failed to install/run locally (AgentInstallError / NonZeroAgentExitCodeError); agent never produced a solution, so only the 12 pass_to_pass passed. Re-run needs a working metacode dist (--mount/--metacode-version). |
+| metacode | meta/avocado_dvsc_tester | 5 | 5/5 | Clean solve on a correctly-provisioned metacode env. (A local run without the metacode dist installed throws AgentInstallError/NonZeroAgentExitCodeError — that is an agent-env gap, not a task signal.) |
 
 Difficulty: easy. Every working solver passes 3/3; `task.toml` is set to `difficulty = "easy"`.
 
