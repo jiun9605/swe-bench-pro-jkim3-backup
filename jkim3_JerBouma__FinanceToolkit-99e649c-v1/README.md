@@ -40,15 +40,21 @@ All tests run through the real package via `uv run --frozen pytest` from `/app`.
 
 ## Model Analysis
 
-| Agent | Model | Attempts | Pass rate | Notes |
-|-------|-------|----------|-----------|-------|
-| oracle | oracle | 3 | _pending re-run_ | Gold patch; must be 3/3. |
-| claude-code | claude-sonnet-4-6 | TBD | _pending_ | Difficulty signal. |
-| claude-code | claude-opus-4-8 | TBD | _pending_ | Difficulty signal. |
-| metacode | meta/avocado_dvsc_tester | TBD | _pending_ | Difficulty signal. |
+`codimango bench run` on the redesigned (codebase-coupled) task, pooled across runs:
 
-Difficulty: `medium` (provisional; platform measures empirically). Requires real
-multi-controller API navigation and pandas reshaping, not a self-contained algorithm.
+| Agent | Model | Attempts | Pass rate | Failure nature |
+|-------|-------|----------|-----------|----------------|
+| oracle | oracle | 6 | 6/6 | — (gold patch; deterministic) |
+| metacode | meta/avocado_dvsc_tester | 10 | 9/10 | 1 genuine wrong-answer: treated a missing Z-Score as 0 points instead of dropping it and renormalizing, which mis-ranked the top observation |
+| claude-code | claude-opus-4-8 | 6 | 5/6 | timeout / agent-exit on the longer convergence |
+| claude-code | claude-sonnet-4-6 | 6 | 2/6 | mostly AgentTimeoutError — actively working (~47 tool calls/trial) but did not converge in budget |
+
+Difficulty: `medium`. The redesign moved the task from a self-contained algorithm
+(all solvers 3/3) to real multi-controller API navigation + pandas reshaping. Failures
+are a mix of one genuine correctness bug (avocado's renormalization-vs-zero handling of a
+missing metric) and convergence-time timeouts (sonnet); the agent timeout was raised to
+2700s to let the signal reflect correctness rather than clock speed. Platform measures
+difficulty empirically.
 
 ## Notes / history
 
