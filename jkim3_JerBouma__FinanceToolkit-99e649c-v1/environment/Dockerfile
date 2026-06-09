@@ -2,7 +2,9 @@
 
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Install git plus the tools the agent-install step needs at run time (curl/bash/node/npm),
+# so the runtime install check short-circuits (no network available at test time).
+RUN apt-get update && apt-get install -y git curl bash nodejs npm && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

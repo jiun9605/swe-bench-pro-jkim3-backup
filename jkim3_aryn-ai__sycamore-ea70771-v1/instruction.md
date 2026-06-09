@@ -1,59 +1,7 @@
-Unify Map and FlatMap into MapTransform. Migrate Explode and UnRoll as examples to demonstrate the pattern. Update DocSet.map() and flat_map() to use MapTransform. Other subclasses can remain as aliases for backward compatibility.
+Create a unified `MapTransform` class in `sycamore/transforms/map.py` that consolidates the existing `Map`, `FlatMap`, and `MapBatch` transform classes under a single `list[Document] -> list[Document]` contract. The new class should extend `BaseMapTransform` and accept a batch-level callable directly — it must not do any per-document wrapping internally.
 
-MapTransform must accept f: Callable[[list[Document]], list[Document]] and call it directly without per-document wrapping. DocSet.map() and flat_map() are responsible for wrapping per-document functions.
+Update `DocSet.map()` and `DocSet.flat_map()` in `docset.py` to construct `MapTransform` instances, wrapping their per-document callables into batch form before passing them. Ensure class-based callables (not just plain functions) continue to work correctly through `DocSet.map()` and `DocSet.flat_map()`.
 
-Reference implementation structure for MapTransform in sycamore/transforms/map.py:
+Migrate `Explode`, `UnRoll` (in `explode.py`), `Sketcher`, `SketchUniquify`, and `SketchDebug` (in `sketcher.py`) to inherit from `MapTransform` instead of `Map`/`FlatMap`. Their per-document static methods and class-based predicates must be adapted to the batch contract so all existing functionality and tests continue to pass.
 
-class MapTransform(BaseMapTransform):
-    """
-    MapTransform is a unified transformation class for applying a callable function
-    to a list of documents and returning a list of documents.
-    The function contract is: f: Callable[[list[Document]], list[Document]]
-    """
-    def __init__(
-        self,
-        child: Optional[Node],
-        *,
-        f: Callable[[list[Document]], list[Document]],
-        f_args: Optional[Iterable[Any]] = None,
-        f_kwargs: Optional[dict[str, Any]] = None,
-        f_constructor_args: Optional[Iterable[Any]] = None,
-        f_constructor_kwargs: Optional[dict[str, Any]] = None,
-        **kwargs
-    ):
-        # Pass f directly to super().__init__ WITHOUT wrapping
-        super().__init__(
-            child,
-            f=f,
-            args=f_args,
-            kwargs=f_kwargs,
-            constructor_args=f_constructor_args,
-            constructor_kwargs=f_constructor_kwargs,
-            **kwargs
-        )
-
-    def run(self, docs: list[Document]) -> list[Document]:
-        return self._local_process(docs)
-
-
-# At end of map.py, create aliases for backward compatibility:
-Map = MapTransform
-FlatMap = MapTransform
-MapBatch = MapTransform
-
-Then update DocSet.map() to wrap per-document functions:
-    from sycamore.transforms import MapTransform
-    def wrap(docs):
-        return [f(d) for d in docs]
-    mapping = MapTransform(self.plan, f=wrap, **resource_args)
-
-And DocSet.flat_map():
-    from sycamore.transforms import MapTransform
-    def wrap(docs):
-        result = []
-        for d in docs:
-            result.extend(f(d))
-        return result
-    flat_map = MapTransform(self.plan, f=wrap, **resource_args)
-
-Also migrate Explode and UnRoll in explode.py to inherit from MapTransform instead of FlatMap, and update imports in __init__.py and sketcher.py.
+Export `MapTransform` from `sycamore.transforms` (`__init__.py`). Keep `Map`, `FlatMap`, and `MapBatch` importable for backward compatibility.

@@ -67,9 +67,11 @@ Run the oracle 3+ times to check for flakiness.
 
 ## Included Tasks
 
-| Task | Repo | Difficulty | Description |
-|------|------|-----------|-------------|
-| `hello-world` | `promplate/partial-json-parser` | Easy | Off-by-one bug in `rfind()` causing inconsistent JSON completion |
+| Task | Repo | Difficulty | Description | Sonnet | Opus | Avocado |
+|------|------|-----------|-------------|--------|------|---------|
+| `hello-world` | `promplate/partial-json-parser` | Easy | Off-by-one bug in `rfind()` causing inconsistent JSON completion | TBD | TBD | TBD |
+| `jkim3_aryn-ai__sycamore-ea70771-v1` | `aryn-ai/sycamore` | Hard | Unify Map and FlatMap into MapTransform with list-to-list contract, migrate Explode/UnRoll, update DocSet | 5/5 (1.0) | 2/5 (0.4) | TBD |
+| `jkim3_JerBouma__FinanceToolkit-99e649c-v1` | `JerBouma/FinanceToolkit` | Medium | TBD | TBD | TBD | TBD |
 
 ## Creating a New Task
 
