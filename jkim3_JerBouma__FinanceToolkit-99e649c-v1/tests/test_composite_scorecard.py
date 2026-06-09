@@ -85,3 +85,25 @@ def test_scorecard_missing_metric_handling():
     assert math.isnan(msft_2020["Asset Turnover Points"])
     assert msft_2020["Z-Score Points"] == 1.0
     assert msft_2020["Gross Margin Points"] == 2.0
+
+
+def test_scorecard_growth_shape_and_values():
+    g = build_toolkit().get_composite_scorecard(growth=True)
+    assert isinstance(g, pd.DataFrame)
+    assert list(g.index) == ["AAPL", "MSFT"]
+    assert g.shape == (2, 4)
+    # first period has no prior -> NaN growth for both tickers
+    assert math.isnan(g.iloc[0, 0])
+    assert math.isnan(g.iloc[1, 0])
+    # clean period-over-period composite growth
+    assert g.iloc[0, 2] == 0.5      # AAPL 2022 vs 2021
+    assert g.iloc[0, 3] == 0.4286   # AAPL 2023 vs 2022
+    assert g.iloc[1, 1] == 0.0125   # MSFT 2021 vs 2020
+    assert g.iloc[1, 2] == -0.2222  # MSFT 2022 vs 2021
+    assert g.iloc[1, 3] == -0.3877  # MSFT 2023 vs 2022
+
+
+def test_scorecard_growth_zero_base_edge():
+    g = build_toolkit().get_composite_scorecard(growth=True)
+    # AAPL's 2020 composite is 0, so 2021 growth divides by zero -> inf
+    assert math.isinf(g.iloc[0, 1])

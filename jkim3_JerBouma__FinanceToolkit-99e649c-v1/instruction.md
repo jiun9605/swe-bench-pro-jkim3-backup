@@ -15,9 +15,13 @@ Score each metric independently across only the observations that have a finite 
 
 The composite is the weighted sum of those points using weights F-Score 0.40, Z-Score 0.30, gross margin 0.15, asset turnover 0.15, proportionally renormalized to sum to 1 over the metrics present for that observation. A metric that is missing or non-finite for an observation is dropped from that observation's weighting (never treated as zero). Round the composite to the toolkit's configured rounding.
 
+The method accepts `growth: bool = False` and `lag: int | list[int] = 1`. When `growth` is True, return the period-over-period growth of each ticker's composite score (using the repo's standard growth helper) instead of the ranked scorecard.
+
 ## Return value
 
-Return a `pandas.DataFrame`:
+When `growth` is True, return a `pandas.DataFrame` indexed by ticker with one column per period, holding the period-over-period growth of each ticker's composite score (earliest period has no prior and is `NaN`).
+
+Otherwise return a `pandas.DataFrame`:
 
 - indexed by `(ticker, period)` with index names `["ticker", "period"]`,
 - with columns, in order: `Composite Score`, `F-Score Points`, `Z-Score Points`, `Gross Margin Points`, `Asset Turnover Points`,

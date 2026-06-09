@@ -8,15 +8,17 @@ cd /app
 
 cat > solution_patch.diff << '__SOLUTION__'
 diff --git a/financetoolkit/toolkit_controller.py b/financetoolkit/toolkit_controller.py
-index 83a8e71..c8242dc 100644
+index 83a8e71..49b46c6 100644
 --- a/financetoolkit/toolkit_controller.py
 +++ b/financetoolkit/toolkit_controller.py
-@@ -3841,3 +3841,98 @@ class Toolkit:
+@@ -3841,3 +3841,115 @@ class Toolkit:
              _copy_normalization_files(path)
          else:
              _copy_normalization_files()
 +
-+    def get_composite_scorecard(self) -> pd.DataFrame:
++    def get_composite_scorecard(
++        self, growth: bool = False, lag: int | list[int] = 1
++    ) -> pd.DataFrame:
 +        """
 +        Rank each company-period observation with a peer-quartile composite scorecard.
 +
@@ -32,13 +34,22 @@ index 83a8e71..c8242dc 100644
 +        gross margin 0.15, asset turnover 0.15), renormalized over the metrics present
 +        for each observation.
 +
++        Args:
++            growth (bool, optional): Whether to return the period-over-period growth of
++                the composite score per ticker instead of the ranked scorecard.
++                Defaults to False.
++            lag (int | list[int], optional): The lag to use for the growth calculation.
++                Defaults to 1.
++
 +        Returns:
-+            pd.DataFrame: Indexed by (ticker, period), sorted best to worst by
-+            composite (ties broken by F-Score descending, then ticker ascending, then
-+            period descending), with columns Composite Score, F-Score Points, Z-Score
-+            Points, Gross Margin Points and Asset Turnover Points. A metric absent for
-+            an observation yields NaN in its points column and is dropped from that
-+            observation's weighting.
++            pd.DataFrame: When ``growth`` is False, a frame indexed by (ticker, period)
++            sorted best to worst by composite (ties broken by F-Score descending, then
++            ticker ascending, then period descending), with columns Composite Score,
++            F-Score Points, Z-Score Points, Gross Margin Points and Asset Turnover
++            Points; a metric absent for an observation yields NaN in its points column
++            and is dropped from that observation's weighting. When ``growth`` is True, a
++            ticker-by-period frame of the period-over-period growth of the composite
++            score.
 +        """
 +        weights = {
 +            "F-Score Points": 0.40,
@@ -96,6 +107,12 @@ index 83a8e71..c8242dc 100644
 +
 +        scorecard = tier_points.loc[list(composite)].copy()
 +        scorecard.insert(0, "Composite Score", pd.Series(composite))
++
++        if growth:
++            composite_by_period = scorecard["Composite Score"].unstack(level="period")
++            return helpers.calculate_growth(
++                composite_by_period, lag=lag, rounding=self._rounding, axis="columns"
++            )
 +
 +        order = (
 +            scorecard.assign(

@@ -26,13 +26,16 @@ assemble the DataFrame.
 
 ## Tests
 
-- fail_to_pass (5): `tests/test_composite_scorecard.py::` test_scorecard_structure,
+- fail_to_pass (7): `tests/test_composite_scorecard.py::` test_scorecard_structure,
   test_scorecard_ranking_order, test_scorecard_composite_values,
-  test_scorecard_tier_points_and_quartiles, test_scorecard_missing_metric_handling.
+  test_scorecard_tier_points_and_quartiles, test_scorecard_missing_metric_handling,
+  test_scorecard_growth_shape_and_values, test_scorecard_growth_zero_base_edge.
   Build a `Toolkit` from the repo's recorded statement pickles
   (`tests/datasets/*.pickle`, offline) and assert DataFrame shape, column order,
   full ranking order, exact composite values, tier points (all quartiles 0-3
-  exercised), and NaN/renormalization handling for missing metrics.
+  exercised), NaN/renormalization handling for missing metrics, and the `growth=True`
+  period-over-period composite growth (incl. the divide-by-zero edge where a prior
+  composite is 0).
 - pass_to_pass (12): `tests/models/test_piotroski_model.py::*` — pre-existing repo
   tests as a regression guard that also exercises the real package build.
 
