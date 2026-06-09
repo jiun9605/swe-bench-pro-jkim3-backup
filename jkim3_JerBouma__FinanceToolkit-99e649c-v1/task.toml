@@ -2,12 +2,12 @@ version = "1.0"
 
 [task]
 name = "jkim3/financetoolkit-composite-scorecard"
-keywords = ["python", "finance", "feature", "ranking"]
+keywords = ["python", "finance", "feature", "ranking", "pandas"]
 
 [metadata]
 author_name = "Jiun Kim"
 author_email = "jkim3@meta.com"
-difficulty = "easy"
+difficulty = "medium"
 category = "feature development"
 tags = ["finance", "swe-bench-pro", "feature"]
 

@@ -1,29 +1,31 @@
-# FinanceToolkit Composite Ranking Scorecard
+# FinanceToolkit Composite Scorecard
 
-Implement a peer-relative composite ranking in a new module `financetoolkit/composite_scorecard.py` with the signature `compute_composite_ranking(metrics) -> dict`.
+Add a `get_composite_scorecard()` method to the `Toolkit` controller that ranks each company-period observation with a peer-quartile composite scorecard built from existing model and ratio outputs.
 
-The input maps each ticker to a dict containing any subset of four higher-is-better metrics: `f_score`, `z_prime`, `gross_margin`, `asset_turnover`. Metrics are provided as pre-computed values — the module performs no data fetching and makes no network calls.
+## Task
 
-Score each metric independently across only the stocks that have a finite value for it: let `b` be the count of peers strictly less than the stock's value and `pr = b / (n - 1)`, where `n` is the number of stocks having that metric; award 0 points for `pr < 0.25`, 1 for `pr < 0.50`, 2 for `pr < 0.75`, else 3. If a stock is the sole holder of a metric it scores 3 for it.
+The method collects four higher-is-better metrics for the toolkit's tickers and reshapes them into a `(ticker, period)` panel:
 
-The composite is the weighted sum of points using weights f_score 0.40, z_prime 0.30, gross_margin 0.15, asset_turnover 0.15, proportionally renormalized to sum to 1 over the metrics that stock actually has.
+- the Piotroski F-Score and the Altman Z-Score (available from the `models` controller),
+- the gross margin and the asset turnover ratio (available from the `ratios` controller).
 
-Any value that is missing, `None`, or non-finite (NaN/Inf) is treated as absent: drop it from that stock's weighting and breakdown, and exclude it from every other stock's peer computation for that metric. Never raise for such values. A stock that ends up with no usable metrics is not ranked.
+Use the existing controller methods to obtain these — do not re-derive them from raw statements. Each metric is a per-ticker, per-period value; an observation is one `(ticker, period)` pair.
 
-Ordering must be fully deterministic: sort by composite descending, then by `f_score` descending, then by ticker ascending. A tied stock that is itself missing `f_score` is treated as `f_score = -1` for ordering purposes only.
+Score each metric independently across only the observations that have a finite value for it: with `b` peers strictly below the observation's value and `n` finite peers in total, `pr = b / (n - 1)` maps to 0 points for `pr < 0.25`, 1 for `pr < 0.50`, 2 for `pr < 0.75`, and 3 for `pr >= 0.75`; if an observation is the sole holder of a metric it scores 3 for it.
+
+The composite is the weighted sum of those points using weights F-Score 0.40, Z-Score 0.30, gross margin 0.15, asset turnover 0.15, proportionally renormalized to sum to 1 over the metrics present for that observation. A metric that is missing or non-finite for an observation is dropped from that observation's weighting (never treated as zero). Round the composite to the toolkit's configured rounding.
 
 ## Return value
 
-Return a dict with these exact keys:
+Return a `pandas.DataFrame`:
 
-- `ranking`: list of tickers from best to worst.
-- `scores`: mapping from each ranked ticker to a dict with `composite` (the renormalized weighted point-sum), `metrics` (the metric values actually used), `tier_points` (per-metric points), `weights_applied` (the renormalized weights), and `excluded_metrics` (sorted list of the metrics dropped for that stock). Excluded metrics must be absent from `metrics` and `tier_points` rather than present with a null value.
-- `excluded_stocks`: list of `{"ticker": ..., "reason": ...}` for stocks with no usable metrics.
-
-Raise `ValueError` when `metrics` is empty.
+- indexed by `(ticker, period)` with index names `["ticker", "period"]`,
+- with columns, in order: `Composite Score`, `F-Score Points`, `Z-Score Points`, `Gross Margin Points`, `Asset Turnover Points`,
+- a points column holds `NaN` where that metric is absent for the observation,
+- rows sorted best to worst by `Composite Score` descending, breaking ties by `F-Score Points` descending (a missing F-Score sorts last), then ticker ascending, then period descending.
 
 ## Constraints
 
-- No network calls, no data fetching — metrics are provided as input.
+- Reuse the existing `models` and `ratios` controller outputs; no new data fetching or network calls.
 - Output must be deterministic.
-- Implement only the module; do not author or modify any test files.
+- Implement only the method; do not author or modify any test files.

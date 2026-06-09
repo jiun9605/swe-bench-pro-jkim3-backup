@@ -1,122 +1,115 @@
 #!/bin/bash
 set -euo pipefail
 
-# The test harness (run_script.sh) and the test file both hardcode
-# /app/financetoolkit/composite_scorecard.py, and the Dockerfile pins
-# WORKDIR/clone to /app. Write there or fail loudly — a silent /testbed
-# fallback would land the module where the tests never look.
+# The FinanceToolkit repo is cloned to /app at build time (see environment/Dockerfile).
+# This oracle applies the gold patch: a get_composite_scorecard() method added to the
+# Toolkit controller. Fail loudly if /app is missing rather than writing nowhere useful.
 cd /app
 
 cat > solution_patch.diff << '__SOLUTION__'
-diff --git a/financetoolkit/composite_scorecard.py b/financetoolkit/composite_scorecard.py
-new file mode 100644
-index 0000000..227567c
---- /dev/null
-+++ b/financetoolkit/composite_scorecard.py
-@@ -0,0 +1,103 @@
-+"""Composite ranking scorecard with peer-quartile tiered scoring."""
+diff --git a/financetoolkit/toolkit_controller.py b/financetoolkit/toolkit_controller.py
+index 83a8e71..c8242dc 100644
+--- a/financetoolkit/toolkit_controller.py
++++ b/financetoolkit/toolkit_controller.py
+@@ -3841,3 +3841,98 @@ class Toolkit:
+             _copy_normalization_files(path)
+         else:
+             _copy_normalization_files()
 +
-+from __future__ import annotations
++    def get_composite_scorecard(self) -> pd.DataFrame:
++        """
++        Rank each company-period observation with a peer-quartile composite scorecard.
 +
-+import math
++        Four higher-is-better metrics are collected across the controllers — the
++        Piotroski F-Score and Altman Z-Score (from ``models``) and the gross margin
++        and asset turnover ratio (from ``ratios``) — and reshaped into a
++        (ticker, period) panel. For each metric independently, every observation is
++        scored 0-3 by its peer quartile, where the peers are all observations that
++        have a finite value for that metric: with ``b`` peers strictly below the
++        observation and ``n`` peers in total, ``pr = b / (n - 1)`` maps to 0 (pr <
++        0.25), 1 (pr < 0.50), 2 (pr < 0.75) or 3 (pr >= 0.75); a sole holder scores 3.
++        The composite is the weighted sum of those points (F-Score 0.40, Z-Score 0.30,
++        gross margin 0.15, asset turnover 0.15), renormalized over the metrics present
++        for each observation.
 +
-+
-+def compute_composite_ranking(
-+    metrics: dict[str, dict[str, float]],
-+) -> dict:
-+    """Compute composite ranking from pre-computed metrics.
-+
-+    Args:
-+        metrics: Mapping of ticker -> {metric_name: value} for
-+            f_score, z_prime, gross_margin, asset_turnover.
-+            Missing or non-finite values are treated as absent.
-+
-+    Returns:
-+        Dict with ranking, scores, and excluded_stocks.
-+    """
-+    if not metrics:
-+        raise ValueError("metrics empty")
-+
-+    weights = {
-+        "f_score": 0.40,
-+        "z_prime": 0.30,
-+        "gross_margin": 0.15,
-+        "asset_turnover": 0.15,
-+    }
-+
-+    # Collect valid values per metric for peer calculations
-+    metric_values = {m: [] for m in weights}
-+    for ticker, m_dict in metrics.items():
-+        for m in weights:
-+            v = m_dict.get(m)
-+            if v is not None and isinstance(v, (int, float)) and math.isfinite(v):
-+                metric_values[m].append(float(v))
-+
-+    scores = {}
-+    excluded_stocks = []
-+
-+    for ticker, m_dict in metrics.items():
-+        # Filter to valid metrics for this ticker
-+        valid_metrics = {}
-+        excluded = []
-+        for m in weights:
-+            v = m_dict.get(m)
-+            if v is not None and isinstance(v, (int, float)) and math.isfinite(v):
-+                valid_metrics[m] = float(v)
-+            else:
-+                excluded.append(m)
-+
-+        if not valid_metrics:
-+            excluded_stocks.append({"ticker": ticker, "reason": "no usable metrics"})
-+            continue
-+
-+        # Renormalize weights
-+        total_w = sum(weights[m] for m in valid_metrics)
-+        weights_applied = {m: weights[m] / total_w for m in valid_metrics}
-+
-+        # Compute tier points per metric
-+        tier_points = {}
-+        for m, v in valid_metrics.items():
-+            peers = metric_values[m]
-+            n = len(peers)
-+            if n <= 1:
-+                points = 3
-+            else:
-+                b = sum(1 for x in peers if x < v)
-+                pr = b / (n - 1)
-+                if pr < 0.25:
-+                    points = 0
-+                elif pr < 0.50:
-+                    points = 1
-+                elif pr < 0.75:
-+                    points = 2
-+                else:
-+                    points = 3
-+            tier_points[m] = points
-+
-+        composite = sum(weights_applied[m] * tier_points[m] for m in valid_metrics)
-+
-+        scores[ticker] = {
-+            "composite": composite,
-+            "metrics": valid_metrics,
-+            "tier_points": tier_points,
-+            "weights_applied": weights_applied,
-+            "excluded_metrics": sorted(excluded),
++        Returns:
++            pd.DataFrame: Indexed by (ticker, period), sorted best to worst by
++            composite (ties broken by F-Score descending, then ticker ascending, then
++            period descending), with columns Composite Score, F-Score Points, Z-Score
++            Points, Gross Margin Points and Asset Turnover Points. A metric absent for
++            an observation yields NaN in its points column and is dropped from that
++            observation's weighting.
++        """
++        weights = {
++            "F-Score Points": 0.40,
++            "Z-Score Points": 0.30,
++            "Gross Margin Points": 0.15,
++            "Asset Turnover Points": 0.15,
 +        }
 +
-+    # Sort by composite desc, f_score desc, ticker asc
-+    def sort_key(item):
-+        ticker, data = item
-+        f = data["metrics"].get("f_score", -1)
-+        return (-data["composite"], -f, ticker)
++        sources = {
++            "F-Score Points": self.models.get_piotroski_score().xs(
++                "Piotroski Score", level=1
++            ),
++            "Z-Score Points": self.models.get_altman_z_score().xs(
++                "Altman Z-Score", level=1
++            ),
++            "Gross Margin Points": self.ratios.get_gross_margin(),
++            "Asset Turnover Points": self.ratios.get_asset_turnover_ratio(),
++        }
 +
-+    ranking = [t for t, _ in sorted(scores.items(), key=sort_key)]
++        metrics = pd.DataFrame({name: frame.stack() for name, frame in sources.items()})
++        metrics.index.names = ["ticker", "period"]
 +
-+    return {
-+        "ranking": ranking,
-+        "scores": scores,
-+        "excluded_stocks": excluded_stocks,
-+    }
++        tier_points = pd.DataFrame(
++            index=metrics.index, columns=list(weights), dtype=float
++        )
++        for column in weights:
++            values = metrics[column].dropna()
++            count = len(values)
++            for index, value in values.items():
++                if count <= 1:
++                    points = 3
++                else:
++                    below = int((values < value).sum())
++                    percentile_rank = below / (count - 1)
++                    if percentile_rank < 0.25:
++                        points = 0
++                    elif percentile_rank < 0.50:
++                        points = 1
++                    elif percentile_rank < 0.75:
++                        points = 2
++                    else:
++                        points = 3
++                tier_points.loc[index, column] = points
++
++        composite = {}
++        for index, row in tier_points.iterrows():
++            present = row.dropna()
++            if present.empty:
++                continue
++            total_weight = sum(weights[name] for name in present.index)
++            composite[index] = round(
++                sum(weights[name] / total_weight * present[name] for name in present.index),
++                self._rounding,
++            )
++
++        scorecard = tier_points.loc[list(composite)].copy()
++        scorecard.insert(0, "Composite Score", pd.Series(composite))
++
++        order = (
++            scorecard.assign(
++                _f=scorecard["F-Score Points"].fillna(-1),
++                _ticker=[index[0] for index in scorecard.index],
++                _period=[str(index[1]) for index in scorecard.index],
++            )
++            .sort_values(
++                by=["Composite Score", "_f", "_ticker", "_period"],
++                ascending=[False, False, True, False],
++            )
++            .index
++        )
++        return scorecard.loc[order]
 __SOLUTION__
 
 git apply --verbose solution_patch.diff || patch --fuzz=5 -p1 -i solution_patch.diff
