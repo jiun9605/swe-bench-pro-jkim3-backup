@@ -45,9 +45,9 @@ All tests run through the real package via `uv run --frozen pytest` from `/app`.
 | Agent | Model | Attempts | Pass rate | Failure nature |
 |-------|-------|----------|-----------|----------------|
 | oracle | oracle | 6 | 6/6 | — (gold patch; deterministic) |
-| metacode | meta/avocado_dvsc_tester | 10 | 9/10 | 1 genuine wrong-answer: treated a missing Z-Score as 0 points instead of dropping it and renormalizing, which mis-ranked the top observation |
-| claude-code | claude-opus-4-8 | 6 | 5/6 | timeout / agent-exit on the longer convergence |
-| claude-code | claude-sonnet-4-6 | 6 | 2/6 | mostly AgentTimeoutError — actively working (~47 tool calls/trial) but did not converge in budget |
+| metacode | meta/avocado_dvsc_tester | 5 | 4/5 | 1 genuine wrong-answer: treated a missing Z-Score as 0 points instead of dropping it and renormalizing, which mis-ranked the top observation |
+| claude-code | claude-opus-4-8 | 3 | 2/3 | timeout / agent-exit on the longer convergence |
+| claude-code | claude-sonnet-4-6 | 1 | 1/3 | mostly AgentTimeoutError — actively working (~47 tool calls/trial) but did not converge in budget |
 
 Difficulty: `medium`. The redesign moved the task from a self-contained algorithm
 (all solvers 3/3) to real multi-controller API navigation + pandas reshaping. Failures
