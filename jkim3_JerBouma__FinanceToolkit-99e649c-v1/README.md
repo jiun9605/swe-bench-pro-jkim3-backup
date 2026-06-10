@@ -43,22 +43,24 @@ All tests run through the real package via `uv run --frozen pytest` from `/app`.
 
 ## Model Analysis
 
-`codimango bench run` per agent on the redesigned (codebase-coupled) task:
+`codimango bench run` per agent on the leak-fixed task (commit `04998fd`). These are the
+**trustworthy** numbers: an earlier test bug let `build_toolkit()` fetch `^TNX` over the
+network, which fails in the hermetic grader and made results flaky — so the pre-fix numbers
+(below, in history) were network noise, not difficulty. Post-fix the tests run fully offline
+(verified: 19/19 with the network namespace blocked, twice; deterministic).
 
 | Agent | Model | Attempts | Pass rate | Failure nature |
 |-------|-------|----------|-----------|----------------|
-| oracle | oracle | 3 | 3/3 | — (gold patch; deterministic) |
-| metacode | meta/avocado_dvsc_tester | 5 | 4/5 | 1 genuine wrong-answer: treated a missing Z-Score as 0 points instead of dropping it and renormalizing, which mis-ranked the top observation |
-| claude-code | claude-opus-4-8 | 3 | 2/3 | 1 timeout + 1 agent-exit on the longer convergence |
-| claude-code | claude-sonnet-4-6 | 3 | 1/3 | 2 × AgentTimeoutError — actively working (~47 tool calls/trial) but did not converge in budget |
+| oracle | oracle | 3 | 3/3 | — (gold patch; deterministic; 19/19 each) |
+| metacode | meta/avocado_dvsc_tester | 5 | 4/5 | 1 genuine wrong-answer: dropped incomplete (NaN-bearing) observations so shape was (6,5) not (8,5), treated a missing metric as 0 instead of NaN, and mishandled the growth zero-base (inf) edge |
+| claude-code | claude-sonnet-4-6 | 3 | _pending clean re-run_ | — |
+| claude-code | claude-opus-4-8 | 3 | _pending clean re-run_ | — |
 
-Difficulty: `medium`. The redesign moved the task from a self-contained algorithm
-(all solvers 3/3 in ~2 min) to real multi-controller API navigation + pandas reshaping;
-agents now spend 20-30 min exploring. Every non-oracle agent dropped at least one trial.
-Failures span a genuine correctness bug (avocado's renormalization-vs-zero handling of a
-missing metric — proof the task discriminates on correctness) and convergence-time
-timeouts / agent-exits (opus, sonnet). The agent timeout was raised to 2700s so the signal
-reflects correctness over clock speed. Platform measures difficulty empirically.
+Difficulty: `medium`. The task requires real multi-controller API navigation + pandas
+reshaping. On the stable (offline) base, the avocado failure is a legitimate correctness
+error on the subtle parts of the contract — which observations to include, missing-metric =
+NaN-not-zero, and the growth edge cases — confirming the task discriminates on correctness.
+Platform measures difficulty empirically.
 
 ## Notes / history
 
@@ -74,3 +76,13 @@ hardcoded import paths, no homemade runner).
 Harness hardening retained from the original: `tests/test.sh` resets all fail_to_pass /
 pass_to_pass test files to gold before applying `test_patch`, so an agent that writes its own
 tests cannot corrupt grading; `run_script.sh` isolates each test's cwd in a subshell.
+
+**Leak fix (`04998fd`).** The first codebase-coupled version had a flaky test: `build_toolkit()`
+omitted `_daily_risk_free_rate` / `_daily_treasury_data`, so the toolkit fetched `^TNX` via
+yfinance — which fails in the hermetic grader and poisoned the yfinance session cache, making
+the 7 composite tests pass-alone / fail-together. This failed Eval-GT (`gt_resolved=0`, all 7
+fail_to_pass tests failing) and made the pre-fix model runs (oracle 6/6, opus 5/6, sonnet 2/6,
+avocado 9/10 with timeouts) **network noise rather than a difficulty signal**. The fix seeds
+both attributes from the shipped pickles in `build_toolkit()` (mirroring the repo's own
+`test_models_controller.py` / `test_toolkit_controller.py`), making the suite fully offline and
+deterministic. The Model Analysis table above reflects the post-fix, trustworthy numbers.
