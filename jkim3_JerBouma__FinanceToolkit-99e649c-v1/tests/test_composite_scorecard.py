@@ -10,10 +10,12 @@ balance = pd.read_pickle("tests/datasets/balance_dataset.pickle")
 income = pd.read_pickle("tests/datasets/income_dataset.pickle")
 cash = pd.read_pickle("tests/datasets/cash_dataset.pickle")
 historical = pd.read_pickle("tests/datasets/historical_dataset.pickle")
+risk_free_rate = pd.read_pickle("tests/datasets/risk_free_rate.pickle")
+treasury_data = pd.read_pickle("tests/datasets/treasury_data.pickle")
 
 
 def build_toolkit():
-    return Toolkit(
+    toolkit = Toolkit(
         tickers=["AAPL", "MSFT"],
         historical=historical,
         balance=balance,
@@ -24,6 +26,13 @@ def build_toolkit():
         end_date="2023-01-01",
         sleep_timer=False,
     )
+    # Seed the cached rate data from fixtures so no network fetch is attempted at
+    # test time (mirrors tests/models/test_models_controller.py). Without this the
+    # toolkit falls back to a live fetch, which fails offline and — via yfinance
+    # session caching — makes results flaky when tests run in one process.
+    toolkit._daily_risk_free_rate = risk_free_rate
+    toolkit._daily_treasury_data = treasury_data
+    return toolkit
 
 
 def test_scorecard_structure():
