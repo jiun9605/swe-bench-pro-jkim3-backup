@@ -2,7 +2,7 @@ schema_version = "1.1"
 
 [task]
 name = "codimango/jkim3_envato__double_entry-f1474f0-v1"
-description = "Add a rolling 24-hour per-account net cross-entity withdrawal limit to the DoubleEntry Ruby library, enforced inside the transfer lock."
+description = "Add a rolling 24-hour per-account dynamic withdrawal limit (ratio of the time-weighted average balance, consumed by gross cross-entity outflow) to the DoubleEntry Ruby library, enforced inside the transfer lock."
 authors = [{ name = "Jiun Kim", email = "jkim3@meta.com" }]
 keywords = ["ruby", "feature", "finance", "concurrency", "activerecord"]
 

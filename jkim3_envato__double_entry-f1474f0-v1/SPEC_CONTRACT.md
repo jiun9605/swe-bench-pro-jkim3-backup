@@ -8,16 +8,18 @@
 > LLM-generated tokens may appear in `instruction.md`.)
 
 ## Feature, in one line
-Add an optional **per-account rolling 24-hour withdrawal limit** to DoubleEntry,
-enforced inside the transfer lock so concurrent transfers cannot race past it.
+Add an optional **per-account rolling 24-hour DYNAMIC withdrawal limit** to
+DoubleEntry: the cap is a configured ratio of the account's time-weighted average
+balance over the trailing 24h, enforced inside the transfer lock so concurrent
+transfers cannot race past it.
 
 ## Public surface the tests rely on
 
 | Name | Kind | Semantic the tests assert |
 |------|------|---------------------------|
-| `DoubleEntry::WithdrawalLimitExceeded` | error class | Raised when a transfer OUT of a limited account would push its trailing-24h outflow over the limit. (Reference solution subclasses `DoubleEntryError`; tests only assert the specific class is raised.) |
-| `daily_withdrawal_limit:` | account attribute | Accepted by `accounts.define(...)` / `Account.new`. A `Money` value in the account's currency, or `nil`. `nil` (the default for every existing account) ⇒ unchanged behavior. |
-| `Account#daily_withdrawal_limit` | reader | Returns the configured limit (or `nil`). Must also be reachable from an `Account::Instance` (i.e. delegated), because `Transfer#process` works with account instances. |
+| `DoubleEntry::WithdrawalLimitExceeded` | error class | Raised when a cross-entity transfer OUT of a limited account would push its trailing-24h outflow over the dynamic cap. (Reference solution subclasses `DoubleEntryError`; tests only assert the specific class is raised.) |
+| `withdrawal_limit_ratio:` | account attribute | Accepted by `accounts.define(...)` / `Account.new`. A numeric ratio (e.g. `0.5`), or `nil`. `nil` (the default for every existing account) ⇒ unchanged behavior. |
+| `Account#withdrawal_limit_ratio` | reader | Returns the configured ratio (or `nil`). Must also be reachable from an `Account::Instance` (i.e. delegated), because `Transfer#process` works with account instances. |
 
 The attribute is wired in via the existing attributes-hash flow: `Account::Set#define`
 already forwards its hash to `Account.new`, so no change is needed there — only
@@ -25,44 +27,55 @@ already forwards its hash to `Account.new`, so no change is needed there — onl
 
 ## Behavioral contract (what each test pins)
 
-The cap is on the account's **net cross-entity outflow** over a trailing 24h
-window. "Entity" = `scope_identity`. A line is cross-entity iff its
-`partner_scope` differs from the account's own scope.
+For a cross-entity withdrawal out of a limited account:
+`reject iff (gross cross-entity outflow in window) + amount > cap`, where
+`cap = (ratio × time_weighted_avg_balance_over_window).floor`. "Entity" =
+`scope_identity`; a line is cross-entity iff its `partner_scope` differs from the
+account's own scope.
 
-1. **Cross-entity only.** Only flows whose partner is in a *different* scope
-   count. Transfers between two accounts of the same entity (same scope) are
-   internal — they neither consume the limit nor, when the current transfer is
-   itself same-entity, trigger the check at all.
-2. **Net of deposits.** Within the window, cross-entity deposits offset
-   cross-entity withdrawals one-for-one. Net withdrawn = (cross-entity outflow −
-   cross-entity inflow) over the window.
-3. **No floor (banking).** If cross-entity inflow exceeds outflow, net withdrawn
-   is negative, so an entity that has paid in more than it has taken out may
-   withdraw that surplus *on top of* the limit (deposit 1000 ⇒ may withdraw
-   1000 + limit). Net is **not** clamped at zero.
-4. **Trailing 24h window.** Only lines with `created_at` in `(now − 24h) .. now`
-   count; older lines (including offsetting deposits) drop out, which can shrink
-   a previously-available allowance (verified with Timecop).
-5. **Inclusive boundary.** A transfer whose amount exactly equals the remaining
+1. **Dynamic cap = ratio × time-weighted average balance.** The cap is the
+   configured ratio times the account's balance **averaged by the time each
+   balance level was held** over `(now − 24h) .. now`, floored to whole cents.
+   This is NOT `ratio × current_balance` and NOT `ratio × mean(per-line
+   balances)` — it is the time integral of the balance trajectory divided by the
+   window length. The trajectory is reconstructed from the balance carried into
+   the window plus each in-window line's stored running balance.
+2. **Gross cross-entity outflow consumes the cap.** Consumption is the sum of
+   cross-entity **debits** (withdrawals to a different scope) in the window.
+   Deposits do **not** offset the outflow — they raise capacity only through the
+   average-balance term, so a deposit is never double-counted.
+3. **Cross-entity only.** Same-entity moves (same scope) never consume the cap,
+   and a same-entity transfer is not checked at all. But a same-entity move DOES
+   change the account's real balance, so it affects the average-balance term (and
+   thus the cap).
+4. **Trailing 24h window / time-weighting.** A balance held only part of the
+   window contributes proportionally; a deposit not yet held for any time adds ~0
+   to the average (so it grants ~0 capacity immediately); an account with no
+   balance history has a zero cap (all verified with Timecop).
+5. **Inclusive boundary.** A withdrawal whose amount exactly equals the remaining
    allowance is allowed; one cent more is rejected.
-6. **Atomic / consistent under lock.** The windowed check happens **inside the
+6. **Atomic / consistent under lock.** The windowed read happens **inside the
    `Locking.lock_accounts` block in `Transfer#process`, before any line is
-   written.** On violation, raise and write **no lines** — balances unchanged.
+   written**, and both the outflow and the average are computed from lines that
+   exist BEFORE this transfer (no circularity). On violation, raise and write
+   **no lines** — balances unchanged.
 7. **Per-entity.** The limit is per account **identifier + scope**. One entity's
    limit does not affect another entity's same-named account.
 8. **Currency.** All `Money` math stays in the account's currency.
-9. **Unlimited accounts unaffected.** Accounts with `daily_withdrawal_limit`
+9. **Unlimited accounts unaffected.** Accounts with `withdrawal_limit_ratio`
    unset (`nil`) behave exactly as before — no new error path, no regressions.
 
-> The cross-entity test hinges on the `partner_scope` column of `Line`
-> (persisted, indexed). A solution that sums `Line.debits` without filtering by
-> `partner_scope`, or that ignores credits, fails the same-entity and
-> deposit-offset examples.
+> Two columns of `Line` carry the difficulty: `partner_scope` (to separate
+> cross-entity from internal flow) and the per-line `balance` (to reconstruct the
+> balance trajectory for the time-weighted average). A solution that sums
+> `Line.debits` without `partner_scope`, or that uses current/mean balance
+> instead of the time-weighted integral, fails the same-entity and
+> time-weighting examples.
 
 ## Files the reference solution touches (for your awareness — do NOT name these in the prompt)
 - `lib/double_entry/errors.rb` — the new error class.
-- `lib/double_entry/account.rb` — read + expose `daily_withdrawal_limit`.
-- `lib/double_entry/transfer.rb` — the windowed check inside the lock.
+- `lib/double_entry/account.rb` — read + expose `withdrawal_limit_ratio`.
+- `lib/double_entry/transfer.rb` — the windowed check + time-weighted average inside the lock.
 
 The prompt should describe the **behavior**, not the file/method names — a
 developer with knowledge of this codebase can locate the lock path and the
@@ -77,10 +90,10 @@ the exact diff is over-specification.
   `test_patch`. `:external` is driven at a *different* scope than `:wallet` so
   wallet→external is cross-entity; wallet↔vault is same-entity.
 - DB: SQLite only (`DB=sqlite`), gemfile `Gemfile.rails-8.0.x`.
-- `fail_to_pass` (9): single-over-limit (+no lines), cumulative, window-expiry,
-  inclusive-boundary (+1¢), deposit-offset (banking), same-entity-withdrawal
-  (no consume), same-entity-deposit (no replenish), offsetting-deposit-ages-out,
-  per-entity.
+- `fail_to_pass` (9): over-cap (+no lines), time-weighted cap (vs current
+  balance), cap grows with hold time, cumulative outflow, same-entity-withdrawal
+  (no consume), same-entity-move-lowers-cap (time-weighted balance), zero-cap with
+  no history, deposit-not-yet-held grants ~0, per-entity.
 - `pass_to_pass` (13): the below-limit happy path (guards against an
   over-restrictive solution) + 12 existing-repo regressions across
   transfer/account/balance_calculator/line specs.

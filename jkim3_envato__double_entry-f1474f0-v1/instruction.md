@@ -1,9 +1,11 @@
-Add an optional per-account rolling 24-hour net withdrawal limit to DoubleEntry.
+Add an optional per-account rolling 24-hour dynamic withdrawal limit to DoubleEntry.
 
-An account can be configured with a daily_withdrawal_limit (a Money value in the account's currency); when unset (the default, nil), the account is unlimited and behaves exactly as today.
+An account can be configured with a withdrawal_limit_ratio (a number such as 0.5); when unset (the default, nil), the account is unlimited and behaves exactly as today.
 
-The limit caps net cross-entity outflow over the trailing 24 hours. Two accounts belong to the same entity when they share a scope. Money moving between two accounts of the same entity is an internal move: it never counts toward the limit, and a transfer that is itself internal is never blocked by it. Only money crossing to a different entity counts, and within the window cross-entity deposits offset cross-entity withdrawals one-for-one. There is no floor — an entity that has received more from other entities than it has sent may withdraw that surplus on top of the limit.
+The limit applies to cross-entity withdrawals — money leaving the account to a different entity, where two accounts belong to the same entity when they share a scope. A transfer between two accounts of the same entity is internal: it is never checked against the limit and never consumes it.
 
-A cross-entity transfer out of a limited account must be rejected if it would push the account's net cross-entity outflow over the trailing 24 hours above the limit. A transfer landing exactly on the remaining allowance is allowed.
+For a cross-entity withdrawal, the cap is dynamic: withdrawal_limit_ratio times the account's time-weighted average balance over the trailing 24 hours, floored to whole cents. Time-weighted means each balance level is weighted by how long it was held during the window (the balance carried into the window, then each change held until the next), not the current balance and not the simple average of past balances.
+
+A cross-entity withdrawal must be rejected if the account's gross cross-entity outflow over the trailing 24 hours, plus the current transfer, would exceed that cap. A withdrawal landing exactly on the remaining allowance is allowed. Deposits do not directly offset outflow — they affect the limit only by raising the average balance.
 
 On rejection, raise DoubleEntry::WithdrawalLimitExceeded and persist nothing — no lines written, balances unchanged.
