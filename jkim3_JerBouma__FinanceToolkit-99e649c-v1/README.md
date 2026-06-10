@@ -53,8 +53,8 @@ network, which fails in the hermetic grader and made results flaky — so the pr
 |-------|-------|----------|-----------|----------------|
 | oracle | oracle | 3 | 3/3 | — (gold patch; deterministic; 19/19 each) |
 | metacode | meta/avocado_dvsc_tester | 5 | 4/5 | 1 genuine wrong-answer: dropped incomplete (NaN-bearing) observations so shape was (6,5) not (8,5), treated a missing metric as 0 instead of NaN, and mishandled the growth zero-base (inf) edge |
-| claude-code | claude-sonnet-4-6 | 3 | _pending clean re-run_ | — |
-| claude-code | claude-opus-4-8 | 3 | _pending clean re-run_ | — |
+| claude-code | claude-opus-4-8 | 3 | 3/3 | solves cleanly but slow (~29 min, near the 2700s budget) |
+| claude-code | claude-sonnet-4-6 | 3 | 2/3 | 1 genuine wrong-answer (18/19, failed `test_scorecard_growth_shape_and_values`); slow/timeout-prone on the other trials |
 
 Difficulty: `medium`. The task requires real multi-controller API navigation + pandas
 reshaping. On the stable (offline) base, the avocado failure is a legitimate correctness
