@@ -43,9 +43,14 @@ with open('$TEST_PATCH_FILE', 'w') as f:
 # Force every grading test file to its gold state BEFORE applying test_patch.
 # An agent may have created or edited these paths (the instruction references the
 # behavior under test), which would make `git apply` fail with "already exists"
-# or let a doctored pass_to_pass spec slip through. We reset each fail_to_pass /
+# or "patch does not apply", or let a doctored pass_to_pass spec slip through. We
+# reset every path the gold test_patch touches PLUS every fail_to_pass /
 # pass_to_pass file: restore it to base if tracked, remove it if the agent
-# created it untracked. Only test files are touched here — never the agent's
+# created it untracked. This includes support files like spec/support/accounts.rb
+# that the test_patch modifies but that are not themselves graded test files —
+# without resetting them, an agent that legitimately edits account/transfer
+# fixtures makes the gold test_patch fail to apply, erroring the whole run
+# (false negative). Only test/support paths are touched here — never the agent's
 # solution (the lib/ changes live in `patch`, not these spec paths).
 RESET_PATHS=$(python3 -c "
 import json
@@ -60,7 +65,18 @@ def files(key):
     for t in val:
         out.add(t.split('::', 1)[0])
     return out
-for p in sorted(files('fail_to_pass') | files('pass_to_pass')):
+# Files the gold test_patch modifies (its target paths), so any agent edits to
+# them are reverted before we re-apply it.
+def patch_files(patch):
+    out=set()
+    for line in (patch or '').splitlines():
+        if line.startswith('+++ b/') or line.startswith('--- a/'):
+            p=line[6:].strip()
+            if p and p != '/dev/null':
+                out.add(p)
+    return out
+tp = config.get('test_patch', '') or config.get('TEST_PATCH', '') or ''
+for p in sorted(files('fail_to_pass') | files('pass_to_pass') | patch_files(tp)):
     print(p)
 " 2>/dev/null)
 for p in $RESET_PATHS; do
