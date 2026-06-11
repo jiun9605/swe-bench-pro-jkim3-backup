@@ -50,77 +50,56 @@ lock. The test suite pins each of these.
 
 ## Completion Rates
 
-`k=5` unless noted. Oracle and the no-fix baseline are verified; frontier/Avocado
-calibration is run during the calibration pass.
+Latest validation cohort — **2026-06-11 14:27**, against HEAD `2f9d375` (after the
+agent timeout was raised to 5400s / verifier 3600s, which cleared the earlier infra
+crashes and near-limit timeouts, so these are clean reasoning numbers). `k=5` for
+agents, `k=3` for oracle.
 
-`k=5` unless noted. **Pass rate = reward over trials that ran to completion**;
-trials that died with `AgentTimeoutError` / `NonZeroAgentExitCodeError` are
-infrastructure failures (agent crash/timeout), not reasoning failures, and are
-excluded from the difficulty signal per AAI policy.
+| Agent / model | Pass rate | Job |
+|---------------|-----------|-----|
+| Oracle | 3/3 (100%) | `bd46057a` |
+| Opus 4.6 (`claude-code`) | 5/5 (100%) | `f24e9495` |
+| GPT-5.5 (`codex`) | 5/5 (100%) | `040057c2` |
+| Avocado (`metacode`) | 4/5 (80%) | `894726a1` |
+| No-fix baseline (no patch) | 0/5 | 9 `fail_to_pass` fail, 13 `pass_to_pass` pass (incl. below-limit happy path) |
 
-| Agent | Raw reward | Completed-trial pass rate | Notes |
-|-------|-----------|---------------------------|-------|
-| Oracle | 3/3 = 1.000 | 3/3 | verified, no flakiness |
-| No-fix baseline (no patch) | 0 | 0 | 9 `fail_to_pass` fail, 13 `pass_to_pass` pass (incl. happy-path) |
-| Sonnet 4.6 (`claude-code`) | 4/5 = 0.800 | **4/4** | the 1 zero-reward trial was `NonZeroAgentExitCodeError` (crash), not a test fail |
-| Opus 4.8 (`claude-code`) | 2/5 = 0.400 | **2/5** | clean run, `err=0` — 3 genuine reasoning failures (see below) |
-| Avocado (`metacode`) | 3/5 = 0.600 | **3/3** | the 2 zero-reward trials were `NonZeroAgentExitCodeError` (crash); 2 passing trials also logged `AgentTimeoutError` |
-
-> **Calibration caveat (timeouts).** The 2026-06-10 16:52 runs hit ~50 min against
-> the old `agent.timeout_sec = 3000`; several trials timed out or crashed near the
-> limit, inflating the raw zero-reward counts for Avocado/Sonnet. `agent.timeout_sec`
-> has been raised to **5400** (verifier 3600) to remove this; rerun for clean raw
-> numbers. The completed-trial column is the trustworthy signal until then.
-
-> **Build history.** flat gross-outflow → flat net cross-entity (Avocado 5/5,
-> solved by one query) → **dynamic cap = ratio × time-weighted average balance**.
-> The dynamic version forces a time integral over a reconstructed balance
-> trajectory. Local reference run: 65/65 across the 5 selected spec files (3 random
-> seeds); base (no solution) 9-fail / 1-pass.
+> The immediately prior cohort (13:54, commit `2b1ab33`) was 5/5 across Oracle,
+> Opus, GPT-5.5 and Avocado, so Avocado's single miss in the latest cohort looks
+> nondeterministic rather than a stable difficulty signal. Earlier 2026-06-10
+> cohorts (commits `0f009c0`…`8473ac6`) showed widespread 0/5 results, but those ran
+> against in-flux task files — the `test-patch-validation` job itself failed at
+> several of those SHAs — so they are not a model signal.
+>
+> Local reference run: 65/65 across the 5 selected spec files (3 random seeds);
+> base (no solution) 9-fail / 13-pass.
 
 ## Model Analysis
 
-Calibration pass 2026-06-10 16:52 (`k=5`, jobs `…d6b0fd` Avocado, `…40f68b` Opus,
-`…bd93a0` Sonnet). Trajectories and verifier output inspected per failing trial.
+Latest cohort (2026-06-11 14:27, HEAD `2f9d375`). The shipped feature is the **flat
+net cross-entity 24h limit** (`daily_withdrawal_limit`, a `Money` value).
 
-### Opus 4.8 — 2/5 (clean, `err=0`) — genuine reasoning failures
-All 3 zero-reward trials (`5Ms5a9k`, `ShYWm9i`, `LefSqNg`) share one signature:
-**13 required pass (incl. the below-cap happy-path), all 9 enforcement
-`fail_to_pass` fail** — i.e. the limit never fired and every withdrawal was
-allowed. Root cause (confirmed in trajectory): Opus set `@withdrawal_limit_ratio`
-and the `attr_reader` on `Account` but **did not add `withdrawal_limit_ratio` to
-the `delegate … to: :account` list on `Account::Instance`**. Because
-`Transfer#process` operates on an `Account::Instance`, `from_account
-.withdrawal_limit_ratio` returned `nil` → `return unless ratio` → enforcement
-skipped entirely. This is a real codebase-comprehension gap (the
-Account → Instance delegation plumbing), exactly what the task is designed to
-test — not a task-setup defect (oracle is 3/3 and other agents pass, so the tests
-are not false-negative).
+### Oracle — 3/3
+Reference solution stable, no flakiness.
 
-### Sonnet 4.6 — 4/4 completed (4/5 raw)
-Every trial that ran to completion passed with a correct time-weighted, cross-
-entity-filtered solution. The single zero-reward trial (`GxTSstJ`) died with
-`NonZeroAgentExitCodeError` (agent crash) — **infrastructure, not a reasoning
-gap**; excluded from the difficulty signal.
+### Opus 4.6 (`claude-code`) — 5/5 · GPT-5.5 (`codex`) — 5/5
+Both frontier agents solved the feature cleanly on every trial.
 
-### Avocado (`metacode`) — 3/3 completed (3/5 raw)
-The 2 zero-reward trials (`7Q5Qeau`, `8pH8wQS`) died with
-`NonZeroAgentExitCodeError`; 2 of the passing trials also logged
-`AgentTimeoutError` (brushing the 3000s limit). **All zero-reward outcomes are
-infra (crash/timeout), not reasoning.** Avocado solves the feature correctly when
-it completes.
+### Avocado (`metacode`) — 4/5
+One trial failed. Per-trial verifier output could not be retrieved — the Codimango
+trials endpoint was returning HTTP 500 for every job at the time of writing — so the
+root cause is unconfirmed. The prior cohort had Avocado at 5/5 on the same task, so
+treat this as a likely nondeterministic miss and re-run to confirm before recording
+it as a reasoning gap.
 
-### Dominant reasoning-gap (the discriminating failure)
-- **Missing `Account::Instance` delegation** — read the ratio on `Account` but not
-  reachable from the instance the transfer uses ⇒ limit silently never enforced
-  (Opus, 3 trials). The headline gap this task catches.
-
-Other traps the suite pins (watch for in future trajectories):
-- **Current/mean balance instead of time-weighted** ⇒ fails time-weighted-cap,
-  cap-grows-with-hold-time, deposit-not-yet-held, same-entity-lowers-cap.
-- **Ignoring `partner_scope`** ⇒ counts internal moves.
-- **Double-counting deposits** (offset outflow AND raise the cap).
-- **Wrong floor / boundary** (`>=` vs `>`, round vs floor).
+### Traps the suite pins (for future trajectories)
+- **Missing `Account::Instance` delegation** of `daily_withdrawal_limit` — read on
+  `Account` but not reachable from the instance `Transfer#process` uses ⇒ the limit
+  silently never fires (all 9 enforcement `fail_to_pass` fail while the 13 required
+  pass). The headline codebase-comprehension gap this task catches.
+- **Ignoring `partner_scope`** ⇒ counts same-entity (internal) moves toward the limit.
+- **No deposit offset / clamping net at zero** ⇒ fails the net-of-deposits and
+  no-floor examples.
+- **Wrong boundary** (`>=` vs `>`) on the inclusive remaining-allowance check.
 - **Partial write on violation** ⇒ fails "writes no lines".
 
 > If any failure traces to a flaky test, missing dependency, or ambiguous spec,
