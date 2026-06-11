@@ -40,10 +40,17 @@ account's own scope.
    balances)` — it is the time integral of the balance trajectory divided by the
    window length. The trajectory is reconstructed from the balance carried into
    the window plus each in-window line's stored running balance.
-2. **Gross cross-entity outflow consumes the cap.** Consumption is the sum of
-   cross-entity **debits** (withdrawals to a different scope) in the window.
-   Deposits do **not** offset the outflow — they raise capacity only through the
-   average-balance term, so a deposit is never double-counted.
+2. **Cross-entity outflow consumes the cap, net of reversals.** Consumption is
+   the sum of cross-entity **debits** (withdrawals to a different scope) in the
+   window, **minus any reversal of those withdrawals**, floored at zero. A
+   *reversal* is a cross-entity **credit** that shares its `detail` record with a
+   cross-entity debit (the refund of a specific withdrawal); it gives back the
+   allowance that withdrawal consumed (full or partial by amount). An **ordinary
+   deposit** (a cross-entity credit with **no** matching `detail`) is **not** a
+   reversal: it does not give back allowance and raises capacity only through the
+   average-balance term, so it is never double-counted. Over-refunding (reversal >
+   its withdrawal) does not create negative consumption — the net is floored at
+   zero.
 3. **Cross-entity only.** Same-entity moves (same scope) never consume the cap,
    and a same-entity transfer is not checked at all. But a same-entity move DOES
    change the account's real balance, so it affects the average-balance term (and
@@ -65,12 +72,14 @@ account's own scope.
 9. **Unlimited accounts unaffected.** Accounts with `withdrawal_limit_ratio`
    unset (`nil`) behave exactly as before — no new error path, no regressions.
 
-> Two columns of `Line` carry the difficulty: `partner_scope` (to separate
-> cross-entity from internal flow) and the per-line `balance` (to reconstruct the
-> balance trajectory for the time-weighted average). A solution that sums
-> `Line.debits` without `partner_scope`, or that uses current/mean balance
-> instead of the time-weighted integral, fails the same-entity and
-> time-weighting examples.
+> Three columns of `Line` carry the difficulty: `partner_scope` (to separate
+> cross-entity from internal flow), the per-line `balance` (to reconstruct the
+> balance trajectory for the time-weighted average), and `detail_type`/`detail_id`
+> (to match a reversal credit to the withdrawal it refunds). A solution that sums
+> `Line.debits` without `partner_scope`, that uses current/mean balance instead of
+> the time-weighted integral, that ignores reversals, or that treats every
+> cross-entity credit (not just detail-matched reversals) as giving back
+> allowance, fails the corresponding examples.
 
 ## Files the reference solution touches (for your awareness — do NOT name these in the prompt)
 - `lib/double_entry/errors.rb` — the new error class.
@@ -84,18 +93,21 @@ configuration key name is fine (tests depend on them); naming private methods or
 the exact diff is over-specification.
 
 ## Test harness facts (already built — for reference only)
-- Tests: `spec/double_entry/withdrawal_limit_spec.rb` (new, 10 examples) +
+- Tests: `spec/double_entry/withdrawal_limit_spec.rb` (new, 14 examples) +
   `:wallet` (limited), `:external` (counterparty), `:vault` (same-entity)
   accounts / 4 transfer routes added to `spec/support/accounts.rb`, delivered via
   `test_patch`. `:external` is driven at a *different* scope than `:wallet` so
   wallet→external is cross-entity; wallet↔vault is same-entity.
 - DB: SQLite only (`DB=sqlite`), gemfile `Gemfile.rails-8.0.x`.
-- `fail_to_pass` (9): over-cap (+no lines), time-weighted cap (vs current
+- `fail_to_pass` (13): over-cap (+no lines), time-weighted cap (vs current
   balance), cap grows with hold time, cumulative outflow, same-entity-withdrawal
   (no consume), same-entity-move-lowers-cap (time-weighted balance), zero-cap with
-  no history, deposit-not-yet-held grants ~0, per-entity.
+  no history, deposit-not-yet-held grants ~0, per-entity, reversal gives back
+  allowance, ordinary-deposit does NOT give back allowance, partial reversal,
+  over-reversal floors net consumption at zero.
 - `pass_to_pass` (13): the below-limit happy path (guards against an
   over-restrictive solution) + 12 existing-repo regressions across
   transfer/account/balance_calculator/line specs.
-- Verified: 65/65 on the 5 selected spec files with the reference solution
-  (3 random seeds); base (no solution) = 9 fail / 1 pass on the new spec.
+- Verified: 69/69 on the 5 selected spec files with the reference solution
+  (3 random seeds + a 2s-delay determinism run); base (no solution) = 13 fail /
+  1 pass on the new spec.
