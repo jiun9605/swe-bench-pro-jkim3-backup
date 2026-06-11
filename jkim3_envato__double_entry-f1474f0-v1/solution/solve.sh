@@ -46,10 +46,10 @@ index 451d72b..3af995b 100644
 +  class WithdrawalLimitExceeded < DoubleEntryError; end
  end
 diff --git a/lib/double_entry/transfer.rb b/lib/double_entry/transfer.rb
-index a846f90..9f1a0c4 100644
+index a846f90..90b44d7 100644
 --- a/lib/double_entry/transfer.rb
 +++ b/lib/double_entry/transfer.rb
-@@ -89,12 +89,82 @@ module DoubleEntry
+@@ -89,12 +89,101 @@ module DoubleEntry
          fail MismatchedCurrencies, "Mismatched currency (#{to_account.currency} <> #{from_account.currency})"
        end
        Locking.lock_accounts(from_account, to_account) do
@@ -68,14 +68,19 @@ index a846f90..9f1a0c4 100644
 +    #
 +    # The cap is dynamic: it is `withdrawal_limit_ratio` times the account's
 +    # TIME-WEIGHTED AVERAGE balance over the trailing 24 hours, floored to whole
-+    # cents. Consumption is the GROSS cross-entity OUTFLOW over the same window:
-+    # the sum of debits whose partner is in another scope. Transfers between two
++    # cents. Consumption is the cross-entity OUTFLOW over the same window NET OF
++    # REVERSALS: the sum of debits whose partner is in another scope, minus any
++    # cross-entity credit that REVERSES one of those withdrawals. A reversal is a
++    # cross-entity credit that shares its `detail` record with a cross-entity
++    # debit (i.e. the refund of a specific withdrawal); only such credits give
++    # back consumed allowance, and the net consumed is floored at zero. An
++    # ordinary cross-entity deposit (no matching detail) is NOT a reversal: it
++    # does not give back allowance and raises capacity only through the
++    # average-balance term, so it is never counted twice. Transfers between two
 +    # accounts of the same entity (same scope) are internal moves that never
-+    # consume the cap. Deposits do NOT offset the outflow — they raise capacity
-+    # only through the average-balance term, so a deposit is never counted twice.
-+    # Both the outflow and the average balance are measured from the lines that
-+    # exist BEFORE this transfer, so the check is well-defined and free of
-+    # circularity.
++    # consume the cap. Both the outflow and the average balance are measured from
++    # the lines that exist BEFORE this transfer, so the check is well-defined and
++    # free of circularity.
 +    def ensure_within_withdrawal_limit(amount, from_account, to_account)
 +      ratio = from_account.withdrawal_limit_ratio
 +      return unless ratio
@@ -90,11 +95,25 @@ index a846f90..9f1a0c4 100644
 +        account: from_account.identifier.to_s,
 +        scope:   from_account.scope_identity,
 +      )
-+
-+      outflow_cents = own_lines.where(created_at: window_start..now).where.not(
++      cross = own_lines.where(created_at: window_start..now).where.not(
 +        partner_scope: from_account.scope_identity,
-+      ).debits.sum(:amount)
-+      withdrawn = Money.new(-outflow_cents, from_account.currency)
++      )
++
++      outflow_cents = cross.debits.sum(:amount)
++
++      # Reversals: cross-entity credits whose detail matches a cross-entity
++      # debit's detail (the refund of a specific withdrawal). They give back the
++      # allowance the matching withdrawal consumed.
++      debit_details = cross.debits.where.not(detail_id: nil).pluck(:detail_type, :detail_id)
++      reversal_cents = 0
++      unless debit_details.empty?
++        reversal_cents = cross.credits.where.not(detail_id: nil).to_a.sum do |line|
++          debit_details.include?([line.detail_type, line.detail_id]) ? line[:amount] : 0
++        end
++      end
++
++      net_consumed_cents = [-outflow_cents - reversal_cents, 0].max
++      withdrawn = Money.new(net_consumed_cents, from_account.currency)
 +
 +      avg_balance_cents = time_weighted_average_balance(own_lines, window_start, now)
 +      cap = Money.new((ratio * avg_balance_cents).floor, from_account.currency)
