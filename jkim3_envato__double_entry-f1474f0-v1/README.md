@@ -9,44 +9,41 @@ Ruby double-entry bookkeeping library.
 
 ## Description
 
-The task asks the agent to add an optional **rolling 24-hour DYNAMIC withdrawal
-limit** to an account. When an account is configured with a
-`withdrawal_limit_ratio` (a number like `0.5`; `nil` = unlimited, the default), a
-cross-entity transfer **out** of that account must be rejected if its gross
-cross-entity outflow over the trailing 24 hours, plus the current transfer, would
-exceed a **dynamic cap** = `ratio × time-weighted average balance over the
-window` (floored to cents). Violations raise a new
-`DoubleEntry::WithdrawalLimitExceeded` and must write no lines.
+The task asks the agent to add an optional **rolling 24-hour net withdrawal limit**
+to an account. When an account is configured with a `daily_withdrawal_limit` (a
+`Money` value in the account's currency; `nil` = unlimited, the default), a transfer
+**out** of that account must be rejected when it would push the account's **net
+cross-entity outflow over the trailing 24 hours** above the limit. Violations raise a
+new `DoubleEntry::WithdrawalLimitExceeded` and must write no lines (balances
+unchanged).
 
 Two things carry the difficulty:
-- **Time-weighted average balance.** The cap is not `ratio × current balance`
-  and not `ratio × mean(per-line balances)` — it is the time integral of the
-  balance trajectory over the window divided by its length. The solver must
-  reconstruct the trajectory from the balance carried into the window plus each
-  in-window line's stored running `balance`, weighting each level by how long it
-  was held. A balance held half the window contributes half; a deposit not yet
-  held grants ~0 capacity; an account with no history has a zero cap.
-- **Cross-entity gross outflow.** Consumption counts only cross-entity **debits**
-  (partner in another `scope`). Same-entity moves never consume the cap (and a
-  same-entity transfer is not checked) — but they DO change the real balance, so
-  they shift the average-balance term. Deposits do not offset outflow; they raise
-  capacity only through the average. This forces the solver into both the
-  `partner_scope` column and the per-line `balance` column.
+- **Net cross-entity accounting.** The limit counts only money that crosses to a
+  *different* entity — lines whose partner is in another `scope`. Moves between two
+  accounts of the same entity (same scope) are internal: they neither consume the
+  limit nor, when the current transfer is itself internal, trigger the check at all.
+  Within the window, cross-entity deposits offset cross-entity withdrawals
+  one-for-one, with **no floor** — an entity that has received more than it has sent
+  may withdraw that surplus on top of the limit. The solver must reach into both the
+  `partner_scope` column and the `Line.amount` sign, not just sum debits.
+- **Trailing window + atomicity.** Only lines with `created_at` in the trailing 24h
+  count, so both prior withdrawals and offsetting deposits age out over time. And the
+  windowed read must run **inside the `Locking.lock_accounts` block in
+  `Transfer#process`, before any line is written**, so concurrent transfers cannot
+  race past the cap.
 
 It tests at once: account-attribute plumbing (`Set#define → Account.new →
 Account::Instance` via `delegate`); the ledger model (`Line.amount` sign,
-`partner_scope`, per-line `balance`); a time-weighted integral over a
-reconstructed trajectory; the inclusive boundary; and — the crux —
-**concurrency correctness**: the read must run **inside the
-`Locking.lock_accounts` block in `Transfer#process`, before any line is
-written**.
+`partner_scope`, `scope`, `created_at`); the net-of-deposits / no-floor semantics;
+the inclusive boundary (a transfer landing exactly on the remaining allowance is
+allowed); and placement of the check inside the transfer lock.
 
-A naive approach fails because it is easy to (a) use current or mean balance
-instead of the time-weighted integral, (b) sum `Line.debits` and ignore
-`partner_scope` (counts internal moves), (c) double-count deposits (offset
-outflow AND raise the cap), (d) check the current same-entity transfer, (e)
-mishandle the inclusive boundary or the floor, or (f) put the check outside the
-lock. The test suite pins each of these.
+A naive approach fails because it is easy to (a) sum `Line.debits` and ignore
+`partner_scope` (counts internal moves), (b) ignore deposits or clamp net at zero
+(breaks the offset / no-floor cases), (c) check or consume the limit on a same-entity
+transfer, (d) mishandle the inclusive boundary, (e) forget to delegate
+`daily_withdrawal_limit` to `Account::Instance` (the limit then never fires), or (f)
+write a partial line set on violation. The test suite pins each of these.
 
 ## Completion Rates
 
