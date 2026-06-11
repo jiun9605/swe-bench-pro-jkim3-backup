@@ -84,22 +84,32 @@ balance).
 
 ## Model Analysis
 
-Latest cohort (2026-06-11 14:27, HEAD `2f9d375`).
+Latest cohort (2026-06-11 18:01, HEAD `2f9d375`). Raw counts include
+infrastructure failures (rate-limit / crash / install); the trustworthy signal is
+the **completed-trial** rate after excluding those per AAI policy.
 
 ### Oracle — 3/3
 Reference solution stable, no flakiness.
 
-### Opus 4.6 (`claude-code`) — 5/5 · GPT-5.5 (`codex`) — 5/5
-Both frontier agents solved the dynamic feature cleanly on every trial.
+### Avocado (`metacode`) — 5/5
+Solves the dynamic feature cleanly on every trial (legit). Earlier cohorts showed
+Avocado zeros that were all infra — a 0-byte `metacode-bin` download
+(`AgentInstallError`) and `NonZeroAgentExitCodeError`/`AgentTimeoutError` near the
+old 3000s limit — never reasoning failures.
 
-### Avocado (`metacode`) — 4/5
-One trial failed as a **non-attempt**: the agent read the repo (dir listing, README)
-and stopped after ~4825 output tokens without writing any `lib/` change — all 9
-enforcement `fail_to_pass` fail while only the pre-existing regressions pass. That is
-an early agent termination (crash / early-exit), not a reasoning gap. The prior cohort
-had Avocado at 5/5 on the same task; confirm via `exception.txt` / `trial.log` and, if
-it logs `NonZeroAgentExitCodeError` / `AgentTimeoutError`, exclude it from the
-difficulty signal per AAI policy.
+### GPT-5.5 (`codex`) — failures are infra (OpenAI rate limit)
+Zero-reward `codex` trials are **not** solve attempts: the agent turn fails with
+`Rate limit reached for gpt-5.5 … tokens-per-min (TPM): Limit 40000000, Used
+40000000` after 5 reconnect retries, so no `lib/` change is written and the verifier
+runs against the unmodified repo (the `13 pass / 9 fail` no-solution signature).
+Excluded from the difficulty signal; `codex` is also not a target calibration agent.
+
+### Opus 4.x (`claude-code`) — the discriminating failure
+Opus is the one frontier agent that fails on *reasoning*, not infra. Across cohorts
+its clean (`err=0`) zero-reward trials share one signature: **13 required pass (incl.
+the within-cap happy path), all 9 enforcement `fail_to_pass` fail** — the limit never
+fires (see below). The 2026-06-10 cohort had Opus 4.8 at 2/5 with this signature on
+every failing trial.
 
 ### The discriminating failure (historical — 2026-06-10, Opus 4.8, 2/5)
 Opus 4.8 failed 3/5 with one signature: **13 required pass (incl. the within-cap happy
