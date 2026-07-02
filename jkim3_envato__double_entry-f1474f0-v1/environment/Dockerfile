@@ -19,6 +19,8 @@ RUN git clone https://github.com/envato/double_entry.git /app \
     && git clean -fd \
     && rm -rf .git .github \
     && git init \
+    && git config user.name "test" \
+    && git config user.email "test@test.com" \
     && git add -A \
     && git commit -m "base" \
     && rm -rf .github
