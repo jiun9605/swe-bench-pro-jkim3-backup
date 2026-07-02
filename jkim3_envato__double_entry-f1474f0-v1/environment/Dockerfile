@@ -12,18 +12,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Clone the repo and pin the base commit (Release 2.0.2).
-# Strip git history to prevent gold commit recovery, but keep a fresh .git
-# so verifier git commands work. Also remove .github metadata.
+# Strip git history to prevent gold commit recovery, but keep a dummy .git
+# so verifier git commands don't fail with "not a git repository".
+# Also remove .github metadata.
 RUN git clone https://github.com/envato/double_entry.git /app \
+    && cd /app \
     && git reset --hard f1474f0fe160edadd3b3264397b85d38d3a7751d \
     && git clean -fd \
     && rm -rf .git .github \
-    && git init \
-    && git config user.name "test" \
-    && git config user.email "test@test.com" \
-    && git add -A \
-    && git commit -m "base" \
-    && rm -rf .github
+    && mkdir -p .git/refs/heads \
+    && echo "ref: refs/heads/main" > .git/HEAD \
+    && echo "f1474f0fe160edadd3b3264397b85d38d3a7751d" > .git/refs/heads/main \
+    && rm -rf .github || true
 
 # Pin the gemfile and install ALL gems at build time (no internet at test time).
 ENV BUNDLE_GEMFILE=/app/spec/support/gemfiles/Gemfile.rails-8.0.x
