@@ -2,6 +2,8 @@ version = "1.0"
 
 [task]
 name = "jkim3/financetoolkit-composite-scorecard"
+format = "swe_bench_single_turn"
+workstream = "swe_public_repo"
 keywords = ["python", "finance", "feature", "ranking", "pandas"]
 
 [metadata]

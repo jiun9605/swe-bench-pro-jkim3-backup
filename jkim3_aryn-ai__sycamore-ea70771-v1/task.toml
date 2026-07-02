@@ -2,6 +2,8 @@ schema_version = "1.1"
 
 [task]
 name = "jkim3/aryn-ai__sycamore-ea70771-v1"
+format = "swe_bench_single_turn"
+workstream = "swe_public_repo"
 description = ""
 authors = [{ name = "Jiun Kim", email = "jkim3@meta.com" }]
 keywords = ["python", "refactoring", "etl"]
