@@ -30,7 +30,4 @@ COPY skills/iso8583-yaml-serialization /app/skills/iso8583-yaml-serialization
 COPY skills/iso8583-yaml-serialization /app/.opencode/skills/iso8583-yaml-serialization
 COPY skills/iso8583-yaml-serialization /app/.codex/skills/iso8583-yaml-serialization
 
-# Also copy CLAUDE.md for backward compatibility reference (not a skill per se)
-COPY CLAUDE.md /app/CLAUDE.md
-
 RUN mkdir -p /logs
