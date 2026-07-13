@@ -12,24 +12,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Clone the repo and pin the base commit (Release 2.0.2).
-# Use a temp directory to clone, then copy files to /app and create a fresh
-# git repo with only the base commit. This strips history while keeping a
-# valid .git for verifier commands. Also remove .github metadata.
-RUN git clone https://github.com/envato/double_entry.git /tmp/repo \
-    && cd /tmp/repo \
+# Keep .git history so base_commit SHA exists for Eval GT grading reset/diff.
+RUN git clone https://github.com/envato/double_entry.git /app \
+    && cd /app \
     && git reset --hard f1474f0fe160edadd3b3264397b85d38d3a7751d \
     && git clean -fdx \
-    && cd /app \
-    && rm -rf /app/* /app/.* 2>/dev/null || true \
-    && cp -r /tmp/repo/. /app/ \
-    && rm -rf /tmp/repo /app/.git /app/.github \
-    && cd /app \
-    && git init -q \
-    && git config --global user.name "test" \
-    && git config --global user.email "test@test.com" \
-    && git add -A \
-    && git commit -qm "base" \
-    && rm -rf .github || true
+    && rm -rf .github
 
 # Pin the gemfile and install ALL gems at build time (no internet at test time).
 ENV BUNDLE_GEMFILE=/app/spec/support/gemfiles/Gemfile.rails-8.0.x
