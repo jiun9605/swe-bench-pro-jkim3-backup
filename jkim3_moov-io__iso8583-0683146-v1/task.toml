@@ -1,0 +1,71 @@
+schema_version = "1.1"
+
+[task]
+name = "jkim3/jkim3_moov-io__iso8583-0683146-v1"
+format = "swe_bench_single_turn"
+workstream = "swe_public_repo"
+description = "Support dynamic MessageSpec selection based on MTI during Unpack in moov-io iso8583 Go library"
+authors = [{ name = "Jiun Kim", email = "jkim3@meta.com" }]
+keywords = ["go", "feature", "payments", "iso8583", "parsing"]
+prompt_style = "implicit"
+task_complexity = "single_skill"
+
+[metadata]
+author_name = "jkim3"
+author_email = "jkim3@meta.com"
+difficulty = "hard"
+category = "feature"
+category_subdomain = "finance_and_accounting"
+category_usecase = "extend_behavior"
+tags = ["SWEBench-External", "SWEBench-Skills", "skill:iso8583-spec-switching", "single_skill", "go"]
+
+[verifier]
+timeout_sec = 3600.0
+
+[agent]
+timeout_sec = 3600.0
+
+[environment]
+build_timeout_sec = 3000.0
+cpus = 2
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+allow_internet = false
+mcp_servers = []
+skills_dir = "skills"
+
+[[skills]]
+name = "iso8583-spec-switching"
+path = "skills/iso8583-spec-switching/SKILL.md"
+source = "authored"
+relationship = "essential"
+skill_type = "domain_knowledge"
+skill_composition = "atomic_skill"
+
+[[skills]]
+name = "iso8583-composite-encoding"
+path = "skills/iso8583-composite-encoding/SKILL.md"
+source = "authored"
+relationship = "distractor"
+distractor_level = 2
+
+[[skills]]
+name = "iso8583-bitmap-optimization"
+path = "skills/iso8583-bitmap-optimization/SKILL.md"
+source = "authored"
+relationship = "distractor"
+distractor_level = 2
+
+[[skills]]
+name = "iso8583-yaml-serialization"
+path = "skills/iso8583-yaml-serialization/SKILL.md"
+source = "authored"
+relationship = "distractor"
+distractor_level = 1
+
+[verifier.env]
+
+[environment.env]
+
+[solution.env]
