@@ -1,7 +1,7 @@
 ---
 name: fedwire-bfc-validation-contract
 description: Business Function Code validation patterns for FedWire messages including mandatory tag enforcement, prohibited tag enforcement, and TypeSubType whitelisting in moov-io/wire
-when-to-use: Use when implementing FedWire message validation logic in moov-io/wire, especially for Business Function Code handling, tag mandatory or prohibited rules, TypeSubType whitelists, ServiceMessage handling, or extending BFC-specific validators in fedWireMessage.go.
+when-to-use: Use when implementing FedWire message validation logic in moov-io/wire, especially for Business Function Code handling, tag mandatory or prohibited rules, TypeSubType whitelists, ServiceMessage handling, SVC business function code, ServiceMessage tag, validateServiceMessage, checkMandatory, checkProhibited, ServiceMessage mandatory, SVC BFC, BusinessFunctionCode validation, or extending BFC-specific validators in fedWireMessage.go.
 skill_type: domain_knowledge
 ---
 
