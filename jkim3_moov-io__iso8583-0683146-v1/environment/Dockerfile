@@ -2,6 +2,7 @@
 FROM golang:1.25-bookworm
 
 RUN apt-get update && apt-get install -y git curl bash nodejs npm ripgrep && rm -rf /var/lib/apt/lists/*
+RUN npm install -g @openai/codex@latest || true
 
 WORKDIR /app
 
