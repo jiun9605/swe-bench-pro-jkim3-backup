@@ -1,0 +1,87 @@
+schema_version = "1.1"
+
+[task]
+name = "jkim3/jkim3_moov-io__wire-ea07df4-v1"
+description = "Enforce ServiceMessage tag mandatory for SVC business function code in moov-io/wire"
+authors = [{ name = "Jiun Kim", email = "jkim3@meta.com" }]
+keywords = ["go", "wire", "fedwire", "validation", "swe-bench-pro", "skills"]
+format = "swe_bench_single_turn"
+workstream = "swe_public_repo"
+prompt_style = "implicit"
+task_complexity = "single_skill"
+
+[metadata]
+author_name = "Jiun Kim"
+author_email = "jkim3@meta.com"
+difficulty = "medium"
+category = "debugging"
+category_usecase = "validation_bugs"
+category_subdomain = "finance_and_accounting"
+reward_type = "binary"
+languages = ["go"]
+tags = ["debugging", "swe-bench-pro", "skills", "go", "validation", "SWEBench-External", "SWEBench-Skills", "skill:fedwire-bfc-validation-contract", "single_skill"]
+
+[verifier]
+timeout_sec = 3600.0
+
+[agent]
+timeout_sec = 3600.0
+
+[environment]
+build_timeout_sec = 3000.0
+cpus = 2
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+allow_internet = false
+mcp_servers = []
+skills_dir = "skills"
+
+[[skills]]
+name = "fedwire-bfc-validation-contract"
+path = "skills/fedwire-bfc-validation-contract/SKILL.md"
+source = "authored"
+relationship = "essential"
+skill_type = "domain_knowledge"
+skill_composition = "atomic_skill"
+
+[[skills]]
+name = "fedwire-imad-rules"
+path = "skills/fedwire-imad-rules/SKILL.md"
+source = "authored"
+relationship = "distractor"
+distractor_level = 2
+
+[[skills]]
+name = "fedwire-remittance-nesting"
+path = "skills/fedwire-remittance-nesting/SKILL.md"
+source = "authored"
+relationship = "distractor"
+distractor_level = 2
+
+[[skills]]
+name = "fedwire-amount-scaling"
+path = "skills/fedwire-amount-scaling/SKILL.md"
+source = "authored"
+relationship = "distractor"
+distractor_level = 2
+
+[[skills]]
+name = "fedwire-account-identifier"
+path = "skills/fedwire-account-identifier/SKILL.md"
+source = "authored"
+relationship = "distractor"
+distractor_level = 1
+
+[[skills]]
+name = "fedwire-cover-payment"
+path = "skills/fedwire-cover-payment/SKILL.md"
+source = "authored"
+relationship = "distractor"
+distractor_level = 1
+
+[verifier.env]
+
+[environment.env]
+
+[solution.env]

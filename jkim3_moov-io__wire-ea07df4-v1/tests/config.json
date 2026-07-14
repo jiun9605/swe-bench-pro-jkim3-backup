@@ -1,0 +1,32 @@
+{
+  "repo": "moov-io/wire",
+  "instance_id": "jkim3_moov-io__wire-ea07df4-v1",
+  "base_commit": "ea07df4bbb0ede5a7a4849e1ec1a171417af9be1",
+  "patch": "diff --git a/fedWireMessage.go b/fedWireMessage.go\nindex 767ec4e..d499401 100644\n--- a/fedWireMessage.go\n+++ b/fedWireMessage.go\n@@ -782,12 +782,27 @@ func (fwm *FEDWireMessage) validateServiceMessage() error {\n \t\treturn fieldError(\"TypeSubType\", NewErrBusinessFunctionCodeProperty(\"TypeSubType\", typeSubType,\n \t\t\tfwm.BusinessFunctionCode.BusinessFunctionCode))\n \t}\n+\tif err := fwm.checkMandatoryServiceMessageTags(); err != nil {\n+\t\treturn err\n+\t}\n \tif err := fwm.checkProhibitedServiceMessageTags(); err != nil {\n \t\treturn err\n \t}\n \treturn nil\n }\n \n+// checkMandatoryServiceMessageTags checks for the tags required by ServiceMessage BFC\n+// ServiceMessage tag {9000} is mandatory and must contain at least LineOne.\n+func (fwm *FEDWireMessage) checkMandatoryServiceMessageTags() error {\n+\tif fwm.ServiceMessage == nil {\n+\t\treturn fieldError(\"ServiceMessage\", ErrFieldRequired)\n+\t}\n+\tif fwm.ServiceMessage.LineOne == \"\" {\n+\t\treturn fieldError(\"ServiceMessage.LineOne\", ErrFieldRequired)\n+\t}\n+\treturn nil\n+}\n+\n // checkProhibitedServiceMessageTags ensures there are no tags present in the message that are incompatible with the BFCServiceMessage code\n // Tags NOT permitted:\n //\n",
+  "test_patch": "diff --git a/service_message_validation_test.go b/service_message_validation_test.go\nnew file mode 100644\nindex 0000000..a65e9b9\n--- /dev/null\n+++ b/service_message_validation_test.go\n@@ -0,0 +1,63 @@\n+package wire\n+\n+import \"testing\"\n+\n+func TestServiceMessageMandatoryForSVC(t *testing.T) {\n+\tfile := NewFile()\n+\tfwm := FEDWireMessage{}\n+\tfwm.SenderSupplied = mockSenderSupplied()\n+\ttst := mockTypeSubType()\n+\ttst.TypeCode = \"10\"\n+\ttst.SubTypeCode = \"01\"\n+\tfwm.TypeSubType = tst\n+\tfwm.InputMessageAccountabilityData = mockInputMessageAccountabilityData()\n+\tfwm.Amount = mockAmount()\n+\tfwm.SenderDepositoryInstitution = mockSenderDepositoryInstitution()\n+\tfwm.ReceiverDepositoryInstitution = mockReceiverDepositoryInstitution()\n+\tbfc := mockBusinessFunctionCode()\n+\tbfc.BusinessFunctionCode = \"SVC\"\n+\tbfc.TransactionTypeCode = \"\"\n+\tfwm.BusinessFunctionCode = bfc\n+\tfile.AddFEDWireMessage(fwm)\n+\terr := file.Validate()\n+\tif err == nil {\n+\t\tt.Fatal(\"expected validation error for missing ServiceMessage tag with SVC BFC, got nil\")\n+\t}\n+}\n+\n+func TestServiceMessageMandatoryLineOne(t *testing.T) {\n+\tfile := NewFile()\n+\tfwm := FEDWireMessage{}\n+\tfwm.SenderSupplied = mockSenderSupplied()\n+\ttst := mockTypeSubType()\n+\ttst.TypeCode = \"10\"\n+\ttst.SubTypeCode = \"01\"\n+\tfwm.TypeSubType = tst\n+\tfwm.InputMessageAccountabilityData = mockInputMessageAccountabilityData()\n+\tfwm.Amount = mockAmount()\n+\tfwm.SenderDepositoryInstitution = mockSenderDepositoryInstitution()\n+\tfwm.ReceiverDepositoryInstitution = mockReceiverDepositoryInstitution()\n+\tbfc := mockBusinessFunctionCode()\n+\tbfc.BusinessFunctionCode = \"SVC\"\n+\tfwm.BusinessFunctionCode = bfc\n+\tsm := NewServiceMessage()\n+\tfwm.ServiceMessage = sm\n+\tfile.AddFEDWireMessage(fwm)\n+\terr := file.Validate()\n+\tif err == nil {\n+\t\tt.Fatal(\"expected validation error for empty ServiceMessage LineOne with SVC BFC, got nil\")\n+\t}\n+}\n+\n+func TestServiceMessageMandatoryPass(t *testing.T) {\n+\tfile := NewFile()\n+\tfwm := createMockServiceMessageData()\n+\tfwm.TypeSubType.TypeCode = \"10\"\n+\tfwm.TypeSubType.SubTypeCode = \"01\"\n+\tfwm.BusinessFunctionCode.BusinessFunctionCode = \"SVC\"\n+\tfwm.BusinessFunctionCode.TransactionTypeCode = \"\"\n+\tfile.AddFEDWireMessage(fwm)\n+\tif err := file.Validate(); err != nil {\n+\t\tt.Fatalf(\"expected valid SVC message with ServiceMessage to pass validation, got %v\", err)\n+\t}\n+}\n",
+  "fail_to_pass": [
+    "TestServiceMessageMandatoryForSVC",
+    "TestServiceMessageMandatoryLineOne"
+  ],
+  "pass_to_pass": [
+    "TestServiceMessageMandatoryPass",
+    "TestServiceMessageTagError",
+    "TestFEDWireMessageWriteServiceMessage"
+  ],
+  "selected_test_files_to_run": [
+    "service_message_validation_test.go",
+    "serviceMessage_test.go",
+    "fedWiremessage_test.go",
+    "writer_test.go"
+  ],
+  "before_repo_set_cmd": "git reset --hard ea07df4bbb0ede5a7a4849e1ec1a171417af9be1\ngit clean -fd",
+  "FAIL_TO_PASS": [
+    "TestServiceMessageMandatoryForSVC",
+    "TestServiceMessageMandatoryLineOne"
+  ],
+  "PASS_TO_PASS": [
+    "TestServiceMessageMandatoryPass",
+    "TestServiceMessageTagError",
+    "TestFEDWireMessageWriteServiceMessage"
+  ]
+}
