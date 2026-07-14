@@ -4,7 +4,7 @@ set -e
 run_all_tests() {
   echo "Running all tests..."
   cd /app
-  go test -v ./... 2>&1 || true
+  go test -race -v ./... 2>&1 || true
 }
 
 run_selected_tests() {
@@ -12,7 +12,7 @@ run_selected_tests() {
   echo "Running selected tests: ${test_files[@]}"
   cd /app
   # For Go, we run full package but filter output later via parser
-  go test -v ./... 2>&1 || true
+  go test -race -v ./... 2>&1 || true
 }
 
 if [ $# -eq 0 ]; then
