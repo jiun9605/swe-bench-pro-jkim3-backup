@@ -1,7 +1,7 @@
 ---
 name: iso8583-spec-switching
 description: Dynamic message specification selection patterns for ISO8583 libraries supporting multiple MTI variants
-when-to-use: Use when implementing MTI-dependent field parsing, dynamic spec dispatch during unpack, or when a single message type needs different field layouts per message type indicator in payment switch implementations.
+when-to-use: Use when implementing MTI-dependent field parsing, dynamic spec dispatch during unpack, registering a selector function or MTI-to-specification map on a message instance before unpacking, or when a single message type needs different field layouts per message type indicator MTI in payment switch implementations. Triggers include selector function, SetSpecSelector, SetSpecMap, MTI-to-spec map, spec selector, dynamic MessageSpec selection based on MTI.
 skill_type: domain_knowledge
 ---
 

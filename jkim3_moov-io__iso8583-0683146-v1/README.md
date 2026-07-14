@@ -34,7 +34,7 @@ Trajectory evidence from local ablation run 2026-07-14:
 - opus WITH 2/5 pass: similar skill read pattern, 3 failures due to missing Clone propagation edge case not implemented in those trials.
 - gpt WITH 1/5 pass: skill read occurs but implementation incomplete in 4 trials, only 1 trial gets full patch correct including Clone.
 
-WITHOUT arms across all models show zero skill file reads by design (skill directory removed via Dockerfile per-skill COPY drop), confirming ablation scope isolates skill availability change only.
+WITHOUT arms across all models show zero skill file reads by design (skills directory removed via Dockerfile whole-dir COPY drop removing essential + distractors together, documented per G16), confirming ablation scope isolates skill availability change only.
 
 ### Skills Summary
 
@@ -46,7 +46,7 @@ WITHOUT arms across all models show zero skill file reads by design (skill direc
 | iso8583-yaml-serialization | distractor | domain_knowledge | atomic_skill | authored | 1 |
 
 ## Structure
-- environment/Dockerfile — golang:1.25-bookworm, clones repo at base commit, go mod vendor offline, COPY skills to three agent locations per Skills spec
+- environment/Dockerfile — golang:1.25-bookworm, clones repo at base commit, go mod vendor offline, COPY skills to six agent locations per Skills spec (/app/skills, /app/.opencode/skills, /app/.codex/skills, /app/.metacode/skills, /app/.agents/skills, /app/.claude/skills)
 - environment/skills/ — 1 essential skill + 3 distractors with YAML frontmatter
 - tests/config.json — repo moov-io/iso8583, base_commit 0683146d, fail_to_pass 9 tests, pass_to_pass 7 existing tests, patch and test_patch embedded
 - tests/run_script.sh — runs `go test -v ./...`
