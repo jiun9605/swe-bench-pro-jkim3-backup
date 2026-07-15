@@ -1,48 +1,45 @@
 # Enforce ServiceMessage tag requirement for SVC business function code
 
 ## Summary
-FEDWireMessage.Validate dispatches by BFC to BFC-specific validators, SVC validator currently enforces prohibited tags and TypeSubType whitelist but does not enforce presence of ServiceMessage tag, unlike other BFC validators which have symmetric mandatory and prohibited checks.
-What task asks at high level: extend validation so SVC BFC requires ServiceMessage tag.
+moov-io/wire is a Go library for parsing, validating, and generating FedWire Funds Service messages using the fixed-width tag format defined by the Federal Reserve. FEDWireMessage validation dispatches by Business Function Code to dedicated validators for each message type. The Service Message BFC validator currently allows messages to pass validation even when the ServiceMessage tag is absent, contrary to FedWire specification where ServiceMessage tag defines the SVC message purpose.
 
 ## Problem
-Describe current behavior today: calling File.Validate on FEDWireMessage with BusinessFunctionCode set to SVC and ServiceMessage field nil returns nil error, passes validation.
-Describe why that's wrong per FedWire spec: ServiceMessage BFC by definition carries ServiceMessage tag {9000} as defining payload; spec treats {9000} as mandatory for SVC and prohibited for all other BFCs. Current codebase already prohibits ServiceMessage in other BFCs via checkSharedProhibitedTags, establishing asymmetry expectation, but SVC side lacks mirror mandatory enforcement.
-Note existing ServiceMessage struct already has its own Validate requiring LineOne non-empty alphanumeric, so BFC level only needs presence check, content validation cascades naturally.
+When File.Validate is called on a FEDWireMessage with BusinessFunctionCode set to SVC and no ServiceMessage tag present, validation returns no error today. Per FedWire specification, ServiceMessage tag {9000} is mandatory for SVC business function code and prohibited for all other business function codes. The codebase already enforces the prohibition side via shared prohibited tag checks, but lacks symmetric mandatory enforcement on the SVC side. The ServiceMessage struct itself already validates required content when present, so the BFC level needs to ensure presence.
 
 ## Expected Behavior
-Modify FedWire message validation so that when BusinessFunctionCode is SVC, Validate returns error if ServiceMessage field is nil.
-Modify so that when ServiceMessage is present but LineOne is empty, Validate returns error consistent with existing ErrFieldRequired pattern used elsewhere in codebase.
-New helper should follow existing naming convention checkMandatory...Tags and be called from validateServiceMessage before prohibited check, mirroring pattern used in validateCustomerTransfer, validateCustomerTransferPlus, validateBankTransfer etc.
-Use existing fieldError helper with ErrFieldRequired sentinel, do not introduce new error types.
-Preserve existing behavior for all other BFCs: they must continue to prohibit ServiceMessage via existing checkSharedProhibitedTags path with no change.
-Preserve existing TypeSubType whitelist check order relative to mandatory/prohibited to match neighboring validators.
+
+- When BusinessFunctionCode indicates Service Message, Validate must return an error if the ServiceMessage tag is not present in the message.
+- When ServiceMessage tag is present but required content is empty, Validate must return an error consistent with existing required field handling in the codebase.
+- Existing valid SVC messages that include ServiceMessage must continue to pass validation without behavior change.
+- Existing behavior for other business function codes must be preserved, including continued prohibition of ServiceMessage tag where applicable.
+- Follow existing codebase conventions for validation structure observed in the repository.
 
 ## Backward Compatibility
-Existing code creating valid SVC messages with ServiceMessage populated continues to pass Validate with no behavior change.
-Only previously invalid case of missing ServiceMessage now correctly errors, which is intended spec tightening not breaking change for valid usage.
+Existing code paths that create valid SVC messages with ServiceMessage populated must continue to work and must pass all existing tests without modification. Only the previously accepted invalid case of missing ServiceMessage becomes an error, which is intended specification tightening.
 
 ## Test Scenarios
-Unpacking or validating SVC message without ServiceMessage tag returns validation error.
-Unpacking SVC message with ServiceMessage tag present but empty LineOne returns validation error.
-Valid SVC message with ServiceMessage containing LineOne passes validation and roundtrips through writer without error.
-Existing ServiceMessage struct unit tests and writer roundtrip test for SVC continue passing.
+
+- Validating an SVC message without ServiceMessage tag returns a validation error.
+- Validating an SVC message with ServiceMessage tag present but empty required content returns a validation error.
+- Validating a valid SVC message with ServiceMessage containing required content passes validation and roundtrips through the writer.
+- Existing tests for ServiceMessage struct validation and writer roundtrip continue passing.
 
 ## Edge Cases
-Nil ServiceMessage pointer must error not panic — nil guard required before accessing nested fields.
-Empty string LineOne must error via existing ServiceMessage.Validate path triggered from BFC validator chain.
-ServiceMessage present with prohibited tags like LocalInstrument or Charges must still error via existing prohibited check — ensure no regression in prohibited path order.
-Other BFCs like BTR, CTR, CTP with ServiceMessage present must continue to error via existing prohibited logic.
-TypeSubType invalid for SVC must still be caught — mandatory check should happen after or before whitelist consistently with neighboring validators; pick order matching existing pattern in validateCustomerTransfer.
 
+- Missing ServiceMessage tag handling must surface as validation error not panic.
+- Empty required content inside ServiceMessage must be caught via existing validation chain.
+- ServiceMessage present alongside prohibited tags for SVC must still trigger appropriate prohibited tag errors without regression.
+- Other business function codes with ServiceMessage present must continue to be rejected.
+- Invalid TypeSubType values for SVC must continue to be caught independent of ServiceMessage presence check.
 
 ## Out of Scope
-Changes to ServiceMessage struct Validate beyond existing LineOne requirement.
-Writer tag order modifications.
-Other BFC validators beyond SVC.
-Network layer, JSON API, client package changes.
-OMAD IMAD handling.
+- Changes to ServiceMessage struct field validation beyond existing requirements.
+- Writer output tag order modifications.
+- Other business function code validators beyond SVC.
+- Network layer, JSON API, or client package changes.
+- IMAD OMAD handling or other accountability data fields.
 
 ## Acceptance Criteria
-New tests for SVC missing ServiceMessage fail before change and pass after.
-Existing tests for ServiceMessage tag error, FEDWireMessage write ServiceMessage, and related BFC validators pass without modification after change.
-No new error types introduced; existing fieldError pattern reused.
+- New tests for SVC missing ServiceMessage fail before the change and pass after.
+- Existing tests for ServiceMessage handling and FEDWireMessage validation pass without modification after the change.
+- No regressions in existing BFC validation behavior for non-SVC message types.
