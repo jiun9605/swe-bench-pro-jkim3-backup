@@ -5,19 +5,20 @@ cd /app 2>/dev/null || cd /testbed 2>/dev/null
 
 cat > solution_patch.diff << '__SOLUTION__'
 diff --git a/message.go b/message.go
-index f7ceb1d..f5ac864 100644
+index f7ceb1d..1d0c752 100644
 --- a/message.go
 +++ b/message.go
-@@ -24,6 +24,8 @@ const (
+@@ -24,6 +24,9 @@ const (
  	bitmapIdx = 1
  )
  
 +type SpecSelector func(mti string) *MessageSpec
 +
++
  type Message struct {
  	spec         *MessageSpec
  	cachedBitmap *field.Bitmap
-@@ -33,6 +35,8 @@ type Message struct {
+@@ -33,6 +36,8 @@ type Message struct {
  
  	// stores all fields according to the spec
  	fields map[int]field.Field
@@ -26,7 +27,7 @@ index f7ceb1d..f5ac864 100644
  }
  
  func NewMessage(spec *MessageSpec) *Message {
-@@ -97,6 +101,26 @@ func (m *Message) GetSpec() *MessageSpec {
+@@ -97,6 +102,26 @@ func (m *Message) GetSpec() *MessageSpec {
  	return m.spec
  }
  
@@ -53,7 +54,7 @@ index f7ceb1d..f5ac864 100644
  func (m *Message) Field(id int, val string) error {
  	m.mu.Lock()
  	defer m.mu.Unlock()
-@@ -334,6 +358,29 @@ func (m *Message) unpack(src []byte) (string, error) {
+@@ -334,6 +359,29 @@ func (m *Message) unpack(src []byte) (string, error) {
  
  	offset := read
  
@@ -83,7 +84,7 @@ index f7ceb1d..f5ac864 100644
  	// unpack Bitmap
  	read, err = m.bitmap().Unpack(src[offset:])
  	if err != nil {
-@@ -429,6 +476,7 @@ func (m *Message) Clone() (*Message, error) {
+@@ -429,6 +477,7 @@ func (m *Message) Clone() (*Message, error) {
  	newMessage := NewMessage(m.spec)
  
  	m.mu.Lock()
@@ -91,7 +92,7 @@ index f7ceb1d..f5ac864 100644
  	bytes, err := m.wrapErrorPack()
  	if err != nil {
  		m.mu.Unlock()
-@@ -436,6 +484,10 @@ func (m *Message) Clone() (*Message, error) {
+@@ -436,6 +485,10 @@ func (m *Message) Clone() (*Message, error) {
  	}
  	m.mu.Unlock()
  

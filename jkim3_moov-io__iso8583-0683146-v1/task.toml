@@ -1,7 +1,7 @@
 schema_version = "1.1"
 
 [task]
-name = "jkim3/jkim3_moov-io__iso8583-0683146-v1"
+name = "codimango/jkim3_moov-io__iso8583-0683146-v1"
 format = "swe_bench_single_turn"
 workstream = "swe_public_repo"
 description = "Support dynamic MessageSpec selection based on MTI during Unpack in moov-io iso8583 Go library"
