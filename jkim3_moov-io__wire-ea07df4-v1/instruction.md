@@ -1,45 +1,43 @@
 # Enforce ServiceMessage tag requirement for SVC business function code
 
 ## Summary
-moov-io/wire is a Go library for parsing, validating, and generating FedWire Funds Service messages using the fixed-width tag format defined by the Federal Reserve. FEDWireMessage validation dispatches by Business Function Code to dedicated validators for each message type. The Service Message BFC validator currently allows messages to pass validation even when the ServiceMessage tag is absent, contrary to FedWire specification where ServiceMessage tag defines the SVC message purpose.
+moov-io/wire is a Go library for parsing, validating, and generating FedWire Funds Service messages. The library validates messages based on Business Function Code, with each code defining which tags are allowed. Currently, messages using the Service Message business function code pass validation even when the ServiceMessage tag is absent, which does not align with FedWire specification where ServiceMessage tag defines the purpose of SVC messages.
 
 ## Problem
-When File.Validate is called on a FEDWireMessage with BusinessFunctionCode set to SVC and no ServiceMessage tag present, validation returns no error today. Per FedWire specification, ServiceMessage tag {9000} is mandatory for SVC business function code and prohibited for all other business function codes. The codebase already enforces the prohibition side via shared prohibited tag checks, but lacks symmetric mandatory enforcement on the SVC side. The ServiceMessage struct itself already validates that LineOne is required when present, so the BFC level needs to ensure presence.
+When validating a FedWire message with Business Function Code set to Service Message and no ServiceMessage tag present, the current implementation returns no error. Per FedWire specification, ServiceMessage tag is mandatory for SVC and prohibited for other business function codes. The codebase enforces the prohibition side but lacks symmetric enforcement on the SVC side.
 
 ## Expected Behavior
 
-- When BusinessFunctionCode indicates Service Message, Validate must return an error if the ServiceMessage tag is not present in the message.
-- When ServiceMessage tag is present but required content is empty, Validate must return an error consistent with existing required field handling in the codebase.
-- Existing valid SVC messages that include ServiceMessage must continue to pass validation without behavior change.
-- Existing behavior for other business function codes must be preserved, including continued prohibition of ServiceMessage tag where applicable.
-- Follow existing codebase conventions for validation error construction and BFC-specific validator structure observed in neighboring validators.
+- The library must return a validation error when BusinessFunctionCode indicates Service Message and ServiceMessage tag is not present in the message.
+- When ServiceMessage tag is present but required content is empty, validation must return an error consistent with existing required field handling.
+- Existing valid SVC messages that include ServiceMessage must continue to pass validation.
+- Existing behavior for other business function codes must be preserved.
 
 ## Backward Compatibility
-Existing code paths that create valid SVC messages with ServiceMessage populated must continue to work and must pass all existing tests without modification. Only the previously accepted invalid case of missing ServiceMessage becomes an error, which is intended specification tightening.
+Existing code that creates valid SVC messages with ServiceMessage populated must continue to work without modification. Only the previously accepted invalid case becomes an error.
 
 ## Test Scenarios
 
 - Validating an SVC message without ServiceMessage tag returns a validation error.
 - Validating an SVC message with ServiceMessage tag present but empty required content returns a validation error.
-- Validating a valid SVC message with ServiceMessage containing required content passes validation and roundtrips through the writer.
-- Existing tests for ServiceMessage struct validation and writer roundtrip continue passing.
+- Validating a valid SVC message with ServiceMessage containing required content passes validation.
+- Existing tests for ServiceMessage handling continue passing.
 
 ## Edge Cases
 
-- Nil ServiceMessage pointer handling must not panic and must surface as validation error.
-- Empty required content inside ServiceMessage must be caught via existing validation chain.
-- ServiceMessage present alongside prohibited tags for SVC must still trigger appropriate prohibited tag errors without regression in error precedence.
-- Other business function codes with ServiceMessage present must continue to be rejected.
-- Invalid TypeSubType values for SVC must continue to be caught independent of ServiceMessage presence check.
+- Missing ServiceMessage tag handling.
+- Empty required content inside ServiceMessage.
+- ServiceMessage present alongside prohibited tags for SVC.
+- Other business function codes with ServiceMessage present.
+- Invalid TypeSubType values for SVC.
 
 ## Out of Scope
 - Changes to ServiceMessage struct field validation beyond existing requirements.
-- Writer output tag order modifications.
+- Writer output modifications.
 - Other business function code validators beyond SVC.
-- Network layer, JSON API, or client package changes.
-- IMAD OMAD handling or other accountability data fields.
+- Network layer or API changes.
 
 ## Acceptance Criteria
 - New tests for SVC missing ServiceMessage fail before the change and pass after.
-- Existing tests for ServiceMessage handling and FEDWireMessage validation pass without modification after the change.
-- No regressions in existing BFC validation behavior for non-SVC message types.
+- Existing tests pass without modification after the change.
+- No regressions in existing validation behavior.
