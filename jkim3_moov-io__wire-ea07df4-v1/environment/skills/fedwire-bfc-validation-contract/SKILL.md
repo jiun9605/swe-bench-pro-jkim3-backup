@@ -22,55 +22,30 @@ Each BFC maps to a specific business scenario with defined mandatory tags that m
 
 - `FEDWireMessage` struct defined in fedWireMessage.go holds pointer fields for each tag, json omitempty tags for API serialization.
 - `File.Validate()` calls `fwm.verify()` which performs mandatory field checks common to all messages then switches on `BusinessFunctionCode.BusinessFunctionCode` string value to dispatch to BFC-specific validator.
-- BFC-specific validators follow naming pattern `validateBankTransfer`, `validateCustomerTransfer`, `validateCustomerTransferPlus`, `validateServiceMessage`, etc., located in fedWireMessage.go between lines 370 and 800 approximately.
-- Each validator typically performs three steps in order: check mandatory tags via `checkMandatory...Tags()`, check prohibited tags via `checkProhibited...Tags()` or `checkSharedProhibitedTags()`, then validate TypeSubType against whitelist via associatedTypeSubTypes map containment check.
-- TypeSubType whitelists defined in associatedTypeSubTypes.go as variables like `svcTypeSubTypes`, `btrTypeSubTypes`, `ctrTypeSubTypes`. Each is an associatedTypeSubTypes map from TypeCode+SubTypeCode concatenated string to boolean. Valid SVC combinations include FundsTransfer RequestReversal 1001, FundsTransfer RequestReversalPriorDay 1007, FundsTransfer RefusalRequestCredit 1032, FundsTransfer SSIServiceMessage 1090, and corresponding ForeignTransfer 20xx and SettlementTransfer 30xx variants.
-- Field error construction uses helper `fieldError(fieldName string, err error, ...value)` returning formatted error. For missing required field use `fieldError("FieldName", ErrFieldRequired)`. For invalid property use `fieldError("FieldName", ErrInvalidProperty, value)`. Do not create new error sentinel types unless absolutely necessary; reuse existing ErrFieldRequired, ErrInvalidProperty, ErrBusinessFunctionCode, ErrTransactionTypeCode from errors.go.
-- ServiceMessage struct defined in serviceMessage.go with tag {9000}, twelve optional string fields LineOne through LineTwelve each max 35 alphanumeric characters. Its Validate method requires LineOne non-empty and alphanumeric, tag must equal TagServiceMessage constant. BFC-level validation should check pointer non-nil presence; struct-level Validate handles content rules.
-- Mock helpers for tests: `mockSenderSupplied()`, `mockTypeSubType()`, `mockInputMessageAccountabilityData()`, `mockAmount()`, `mockSenderDepositoryInstitution()`, `mockReceiverDepositoryInstitution()`, `mockBusinessFunctionCode()`, `createMockServiceMessageData()` defined in *_test.go files in same package and accessible from new test files. Use `NewFile()` then `file.AddFEDWireMessage(fwm)` then `file.Validate()` pattern seen in fedWiremessage_test.go to trigger full validation chain including BFC dispatch.
+- BFC-specific validators follow naming pattern `validateBankTransfer`, `validateCustomerTransfer`, `validateCustomerTransferPlus`, `validateServiceMessage`, etc., located in fedWireMessage.go.
+- Each validator typically enforces BFC-specific business rules: mandatory tag presence, prohibited tag absence, and TypeSubType whitelist validation via associatedTypeSubTypes map containment check. The exact ordering varies by validator; follow neighboring BFC implementations for consistency.
+- TypeSubType whitelists defined in associatedTypeSubTypes.go as variables like `svcTypeSubTypes`, `btrTypeSubTypes`, `ctrTypeSubTypes`. Each is an associatedTypeSubTypes map from TypeCode+SubTypeCode concatenated string to boolean.
+- Field error construction uses helper `fieldError(fieldName string, err error, ...value)` returning formatted error. Reuse existing error sentinels from errors.go rather than creating new types unless absolutely necessary.
+- ServiceMessage struct defined in serviceMessage.go with tag {9000}, twelve optional string fields LineOne through LineTwelve. Its Validate method enforces content rules; BFC-level validation typically checks structural presence.
+- Mock helpers for tests are defined in *_test.go files in same package and accessible from new test files. Use `NewFile()` then `file.AddFEDWireMessage(fwm)` then `file.Validate()` pattern seen in fedWiremessage_test.go to trigger full validation chain including BFC dispatch.
 
 ## Design Patterns
 
-Mandatory tag enforcement pattern observed across codebase for BFCs other than SVC:
+Mandatory tag enforcement across BFC validators typically extracts a helper that checks presence of required tag structs and returns an appropriate field error on absence. Prohibited tag enforcement uses either shared or bespoke helpers depending on BFC grouping. Validators compose these helpers along with TypeSubType whitelist checks; exact composition order follows neighboring BFC implementations for consistency.
 
-```go
-func (fwm *FEDWireMessage) checkMandatoryXTags() error {
-    if fwm.SomeTag == nil {
-        return fieldError("SomeTag", ErrFieldRequired)
-    }
-    // additional field-level checks if needed beyond nil
-    return nil
-}
-```
-
-Then in validateX:
-```go
-if err := fwm.checkMandatoryXTags(); err != nil { return err }
-if err := fym.checkProhibitedXTags(); err != nil { return err }
-// TypeSubType whitelist check
-```
-
-Prohibited tag pattern uses checkSharedProhibitedTags for BFCs sharing same forbidden set (BTR, CKS, DEP, FFR, FFS, DRB, DRC, DRW share one set; CTR, CTP, SVC have bespoke prohibited functions). Shared function explicitly errors if ServiceMessage != nil, establishing symmetry expectation that ServiceMessage is prohibited everywhere except SVC where it should be mandatory.
-
-When adding new mandatory check, follow existing naming, place helper near corresponding prohibited helper in fedWireMessage.go for locality, ensure nil pointer guard before accessing nested fields to avoid panic during validation.
+When adding new mandatory logic, follow existing naming conventions in fedWireMessage.go, place helpers near related prohibited helpers for locality, and guard pointer dereferences to avoid panics during validation. Reuse existing error sentinels where possible.
 
 ## Failure Modes
 
-- Nil pointer dereference when checking nested field without nil guard on parent struct pointer — always check `if fwm.ServiceMessage == nil` before accessing `fwm.ServiceMessage.LineOne`.
-- Adding mandatory check in generic verify() instead of BFC-specific validator causes false positives on other BFCs that must prohibit the tag.
-- Forgetting TypeSubType whitelist check order — whitelist should be checked after mandatory/prohibited or before depending on existing pattern in target validator; follow neighboring BFC validators for consistency.
-- Using wrong error sentinel — ErrFieldRequired for missing mandatory tag, ErrInvalidProperty for present but forbidden tag, ErrBusinessFunctionCode for BFC mismatch, ErrTransactionTypeCode for invalid TransactionTypeCode value.
-- Test only checking direct helper not full Validate path — full path via File.Validate ensures BFC dispatch wiring is correct and no regressions in other validators.
-- Incomplete test coverage leading to silent pass on base commit — new tests must assert error on missing mandatory case, not just pass on valid case, to ensure fail_to_pass signal.
+- Nil pointer dereference when checking nested fields without nil guard on parent struct pointer.
+- Adding mandatory check in generic verify() instead of BFC-specific validator causes false positives on other BFCs.
+- Inconsistent ordering relative to prohibited checks or TypeSubType whitelist — follow neighboring BFC validators for consistency.
+- Using wrong error sentinel for the condition type.
+- Test only checking direct helper not full Validate path — full path via File.Validate ensures BFC dispatch wiring is correct.
+- Incomplete test coverage leading to silent pass on base commit.
 
 ## Testing Strategy
 
-Define table-driven or separate test functions in new test file under package wire, following existing naming like TestInvalid...For... and Test...Mandatory... patterns seen in fedWiremessage_test.go. Use mock helpers to construct minimal valid FEDWireMessage then modify specific field to trigger error condition.
+Define table-driven or separate test functions in new test file under package wire, following existing naming patterns seen in fedWiremessage_test.go. Use mock helpers to construct minimal valid FEDWireMessage then modify specific fields to trigger error conditions.
 
-For BFC mandatory enforcement, at minimum cover:
-- BFC set to target value with mandatory tag omitted expecting error via file.Validate
-- BFC set to target value with mandatory tag present but empty required subfield expecting error
-- BFC set to target value with mandatory tag correctly populated expecting pass via file.Validate
-- Existing pass_to_pass tests for same BFC with valid data continue passing to ensure no regression in prohibited tag checks or TypeSubType handling.
-
-Use `go test -run TestName -v` pattern for targeted execution during development; full suite via `go test ./...` for regression check.
+For BFC validation changes, cover both positive and negative paths via file.Validate to ensure mandatory enforcement works and valid cases still pass, without regressing other BFC validators. Use `go test -run` for targeted execution and full suite for regression check.
