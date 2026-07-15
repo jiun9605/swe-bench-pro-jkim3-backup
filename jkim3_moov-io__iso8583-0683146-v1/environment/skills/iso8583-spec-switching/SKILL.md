@@ -24,14 +24,18 @@ Dynamic dispatch defers spec selection until after MTI is parsed during unpack. 
 - Unpack locks mutex, resets fields, unpacks MTI field at index 0 first, then bitmap, then iterates field IDs 2..bitmap length.
 - Bitmap field spec defines presence bits; presence bits 1,65,129,193 indicate extended bitmaps and are skipped in field loop.
 - createField uses current spec to instantiate field objects; changing spec mid-unpack affects subsequent createField calls.
-- Clone creates new message via NewMessage with current spec then packs and unpacks; selector state must propagate for consistent behavior.
+- Clone creates new message via NewMessage with current spec then packs and unpacks; selector state must propagate for consistent behavior. Clone must copy selector so cloned.GetSpecSelector() returns non-nil when original had selector registered.
 - Field String() returns string and error; always check error when reading MTI value for dispatch decisions.
+- Public API for dynamic selection follows existing getter/setter naming: `SetSpecSelector(selector SpecSelector)`, `GetSpecSelector() SpecSelector`, and convenience `SetSpecMap(specMap map[string]*MessageSpec)`. All three must hold the message mutex like existing GetSpec/Set methods.
 
 ## Design Patterns
 
-Selector function type receives MTI string and returns spec pointer or nil. Nil indicates no matching spec and should surface as unpack error rather than silent fallback to avoid data corruption.
+Define `type SpecSelector func(mti string) *MessageSpec` at package level near Message struct. Selector function type receives MTI string and returns spec pointer or nil. Nil indicates no matching spec and should surface as unpack error rather than silent fallback to avoid data corruption.
 
-Map-based registration is a convenience wrapper around selector function for static MTI-to-spec tables common in switch configurations.
+Expose three public methods on Message following existing mutex pattern:
+- `SetSpecSelector(selector SpecSelector)` stores selector under lock.
+- `GetSpecSelector() SpecSelector` returns current selector under lock for inspection and Clone propagation.
+- `SetSpecMap(specMap map[string]*MessageSpec)` is convenience wrapper building a SpecSelector that looks up MTI in the map, for static MTI-to-spec tables common in switch configurations.
 
 Spec validation should occur at registration time and again at selection time to catch configuration errors early. Validating selected spec before swapping prevents partial unpack state corruption.
 

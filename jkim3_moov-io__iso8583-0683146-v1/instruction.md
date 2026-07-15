@@ -8,7 +8,8 @@ When unpacking a raw ISO 8583 message, the parser uses one fixed specification f
 
 ## Expected Behavior
 
-- The API must allow registering a selector function or MTI-to-specification map on a message instance before unpacking.
+- The API must allow registering a selector function or MTI-to-specification map on a message instance before unpacking. Expose methods `SetSpecSelector`, `GetSpecSelector`, and `SetSpecMap` on the Message type following existing mutex conventions.
+- Define a `SpecSelector` function type receiving MTI string and returning `*MessageSpec`.
 - During unpack, after the MTI field is parsed, the library must invoke the registered selector with the MTI value.
 - The selector's result determines the specification used for parsing all remaining fields in that unpack operation.
 - If no selector is registered, existing static behavior is preserved unchanged.
