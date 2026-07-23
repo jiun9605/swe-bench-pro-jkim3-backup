@@ -1,13 +1,13 @@
-Add an optional per-account rolling 24-hour dynamic withdrawal limit to DoubleEntry.
+Add a rolling 24h per-account dynamic withdrawal limit to DoubleEntry.
 
-An account can be configured with a withdrawal_limit_ratio (a number such as 0.5); when unset (the default, nil), the account is unlimited and behaves exactly as today.
+Accounts can set withdrawal_limit_ratio (e.g. 0.5). nil = unlimited, behaves as today.
 
-The limit applies to cross-entity withdrawals — money leaving the account to a different entity, where two accounts belong to the same entity when they share a scope. A transfer between two accounts of the same entity is internal: it is never checked against the limit and never consumes it.
+We check cross-entity withdrawals only — money leaving to a different entity. Same scope = same entity, so same-scope is internal. Internal never checked, never consumes, but it still changes real balance.
 
-For a cross-entity withdrawal, the cap is dynamic: withdrawal_limit_ratio times the account's time-weighted average balance over the trailing 24 hours, floored to whole cents. Time-weighted means each balance level is weighted by how long it was held during the window (the balance carried into the window, then each change held until the next), not the current balance and not the simple average of past balances.
+Cap is dynamic: ratio * time-weighted average balance over trailing 24h, floored to cents. Time-weighted, not current balance.
 
-A cross-entity withdrawal can later be reversed/refunded: a deposit back into the account that references the same detail as the original withdrawal undoes that withdrawal's consumption of the limit (a partial refund gives back proportionally; refunding more than was withdrawn never creates extra allowance). An ordinary deposit that doesn't reference a prior withdrawal is not a reversal and only affects the limit through the balance it adds.
+A withdrawal can be reversed/refunded — reversal gives back the allowance it consumed. Partial reversal gives back partially, over-refunding doesn't create extra allowance. Ordinary deposit isn't a reversal, only affects cap through average.
 
-A cross-entity withdrawal must be rejected if the account's cross-entity outflow over the trailing 24 hours — net of any reversals (above), floored at zero — plus the current transfer, would exceed that cap. A withdrawal landing exactly on the remaining allowance is allowed. An ordinary deposit (one that is not a reversal) does not offset outflow; it affects the limit only by raising the average balance.
+Reject if (net cross-entity outflow in trailing 24h, floored at 0, net of reversals) + current amount > cap. Landing exactly on remaining is allowed. Ordinary deposit doesn't offset outflow.
 
-On rejection, raise DoubleEntry::WithdrawalLimitExceeded and persist nothing — no lines written, balances unchanged.
+On reject raise DoubleEntry::WithdrawalLimitExceeded, write no lines — balances unchanged.
