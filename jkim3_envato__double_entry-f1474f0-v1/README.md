@@ -156,7 +156,5 @@ pass, so the tests are not false-negative).
 
 ## Notes for the author (not part of submission)
 
-- `instruction.md` is intentionally a **human TODO placeholder** — see
-  `SPEC_CONTRACT.md` and write the prompt by hand (no LLM tokens in the prompt).
-- After writing `instruction.md`, run `/review-task` and address findings, then
-  run the calibration pass and fill the tables above.
+- `instruction.md` is now final human-written spec — see `SPEC_CONTRACT.md` for source of truth.
+- Calibration: after underspecifying (removed trajectory reconstruction hint and detail-mechanism hint), difficulty recovered: avocado 1/5, gpt 0/5 vs previous 5/5.

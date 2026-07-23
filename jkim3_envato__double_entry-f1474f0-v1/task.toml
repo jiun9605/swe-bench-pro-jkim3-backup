@@ -13,6 +13,8 @@ author_name = "Jiun Kim"
 author_email = "jkim3@meta.com"
 difficulty = "medium"
 category = "feature"
+category_subdomain = "finance_and_accounting"
+category_usecase = "extend_behavior"
 languages = ["ruby"]
 tags = ["feature", "swe-bench-pro", "SWEBench-External", "ruby"]
 

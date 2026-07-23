@@ -6,7 +6,7 @@ We check cross-entity withdrawals only — money leaving to a different entity. 
 
 Cap is dynamic: ratio * time-weighted average balance over trailing 24h, floored to cents. Time-weighted, not current balance.
 
-A withdrawal can be reversed/refunded — reversal gives back the allowance it consumed. Partial reversal gives back partially, over-refunding doesn't create extra allowance. Ordinary deposit isn't a reversal, only affects cap through average.
+A withdrawal can be reversed/refunded — reversal shares the withdrawal's detail and gives back the allowance it consumed. Partial reversal gives back partially, over-refunding doesn't create extra allowance. Ordinary deposit isn't a reversal, only affects cap through average.
 
 Reject if (net cross-entity outflow in trailing 24h, floored at 0, net of reversals) + current amount > cap. Landing exactly on remaining is allowed. Ordinary deposit doesn't offset outflow.
 
