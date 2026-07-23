@@ -55,34 +55,68 @@ class TestResult:
 
 
 def parse_test_output(stdout_content: str, stderr_content: str) -> List[TestResult]:
-    results = []
+    results: List[TestResult] = []
     combined_content = stdout_content + "\n" + stderr_content
     combined_content = re.sub(r"\x1b\[[0-9;]*m", "", combined_content)
 
-    # Go test verbose output: === RUN TestName   then --- PASS: TestName (0.00s) or --- FAIL
-    # Also handle subtests with slashes.
-    pattern = r"---\s+(PASS|FAIL|SKIP):\s+([A-Za-z0-9_\/]+)"
+    # --- Hardened JSON parsing to prevent R07 reward hacking ---
+    # go test -json emits one JSON object per line with fields:
+    #   {"Action":"pass|fail|skip|output|run", "Test":"TestName", "Package":"...", ...}
+    # We MUST only trust Action=pass/fail/skip, ignoring Action=output which contains
+    # user stdout that could include fake "--- PASS: ..." lines.
+    has_json_events = False
+    for line in combined_content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            evt = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(evt, dict):
+            continue
+        action = evt.get("Action")
+        test_name_raw = evt.get("Test")
+        # Only consider real test results, not package-level or output
+        if action in ("pass", "fail", "skip") and test_name_raw:
+            has_json_events = True
+            base_name = test_name_raw.split("/")[0]
+            if action == "pass":
+                status = TestStatus.PASSED
+            elif action == "fail":
+                status = TestStatus.FAILED
+            elif action == "skip":
+                status = TestStatus.SKIPPED
+            else:
+                status = TestStatus.ERROR
 
-    for match in re.finditer(pattern, combined_content):
-        status_str = match.group(1)
-        test_name = match.group(2).split("/")[
-            0
-        ]  # strip subtest suffix for base matching, keep full also
+            results.append(TestResult(name=base_name, status=status))
+            # Also keep full subtest name for exact matching if needed
+            if test_name_raw != base_name:
+                results.append(TestResult(name=test_name_raw, status=status))
 
-        if status_str == "PASS":
-            status = TestStatus.PASSED
-        elif status_str == "FAIL":
-            status = TestStatus.FAILED
-        elif status_str == "SKIP":
-            status = TestStatus.SKIPPED
-        else:
-            status = TestStatus.ERROR
+    # Fallback to legacy verbose parsing only if no JSON events found
+    # (e.g., local runs without -json). This path is still vulnerable to fake
+    # PASS lines, but in production -json will be present and will dominate.
+    if not has_json_events:
+        pattern = r"---\s+(PASS|FAIL|SKIP):\s+([A-Za-z0-9_\/]+)"
+        for match in re.finditer(pattern, combined_content):
+            status_str = match.group(1)
+            full_match_name = match.group(2)
+            test_name = full_match_name.split("/")[0]
 
-        results.append(TestResult(name=test_name, status=status))
-        # Also add full name for exact matching if needed
-        full_name = match.group(2)
-        if full_name != test_name:
-            results.append(TestResult(name=full_name, status=status))
+            if status_str == "PASS":
+                status = TestStatus.PASSED
+            elif status_str == "FAIL":
+                status = TestStatus.FAILED
+            elif status_str == "SKIP":
+                status = TestStatus.SKIPPED
+            else:
+                status = TestStatus.ERROR
+
+            results.append(TestResult(name=test_name, status=status))
+            if full_match_name != test_name:
+                results.append(TestResult(name=full_match_name, status=status))
 
     return results
 
@@ -146,12 +180,28 @@ def validate_contract(output_path: Path) -> None:
 
 
 def export_to_json(results: List[TestResult], output_path: Path) -> None:
-    unique_results = {result.name: result for result in results}.values()
+    # Failure must dominate success to prevent reward hacking via fake PASS lines
+    # overwriting a real FAIL. Priority: FAILED/ERROR > PASSED > SKIPPED
+    priority = {
+        TestStatus.FAILED: 3,
+        TestStatus.ERROR: 3,
+        TestStatus.PASSED: 1,
+        TestStatus.SKIPPED: 0,
+    }
+    unique: dict[str, TestResult] = {}
+    for r in results:
+        existing = unique.get(r.name)
+        if existing is None:
+            unique[r.name] = r
+        else:
+            # Keep higher priority status
+            if priority.get(r.status, 0) > priority.get(existing.status, 0):
+                unique[r.name] = r
 
     json_results = {
         "tests": [
             {"name": result.name, "status": result.status.name}
-            for result in unique_results
+            for result in unique.values()
         ]
     }
 
