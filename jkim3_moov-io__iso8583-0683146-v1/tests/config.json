@@ -28,5 +28,26 @@
   "selected_test_files_to_run": [
     "github.com/moov-io/iso8583"
   ],
-  "before_repo_set_cmd": ""
+  "before_repo_set_cmd": "",
+  "FAIL_TO_PASS": [
+    "TestDynamicSpecMTI0800",
+    "TestDynamicSpecMTI0100",
+    "TestDynamicSpecSelectorNilFallback",
+    "TestDynamicSpecBackwardCompat",
+    "TestDynamicSpecUnknownMTI",
+    "TestDynamicSpecMissingMTI",
+    "TestDynamicSpecCloneCopiesSelector",
+    "TestDynamicSpecConcurrentUnpack",
+    "TestDynamicSpecInvalidBitmapLength",
+    "TestDynamicSpecPackBehavior"
+  ],
+  "PASS_TO_PASS": [
+    "TestMessage",
+    "TestPackUnpack",
+    "TestMessageJSON",
+    "TestMessageClone",
+    "TestDescribe",
+    "TestFieldFilter",
+    "TestUnknownTags"
+  ]
 }
