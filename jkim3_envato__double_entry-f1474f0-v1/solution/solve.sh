@@ -46,10 +46,10 @@ index 451d72b..3af995b 100644
 +  class WithdrawalLimitExceeded < DoubleEntryError; end
  end
 diff --git a/lib/double_entry/transfer.rb b/lib/double_entry/transfer.rb
-index a846f90..90b44d7 100644
+index a846f90..22b1185 100644
 --- a/lib/double_entry/transfer.rb
 +++ b/lib/double_entry/transfer.rb
-@@ -89,12 +89,116 @@ module DoubleEntry
+@@ -89,12 +89,114 @@ module DoubleEntry
          fail MismatchedCurrencies, "Mismatched currency (#{to_account.currency} <> #{from_account.currency})"
        end
        Locking.lock_accounts(from_account, to_account) do
@@ -160,9 +160,11 @@ index a846f90..90b44d7 100644
 +      span.zero? ? prev_balance.to_f : weighted / span
 +    end
 +
++
      def create_lines(amount, code, detail, from_account, to_account, metadata)
        credit, debit = Line.new, Line.new
  
+
 __SOLUTION__
 
 git apply --verbose solution_patch.diff || patch --fuzz=5 -p1 -i solution_patch.diff
