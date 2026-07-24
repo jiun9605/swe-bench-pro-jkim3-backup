@@ -19,29 +19,24 @@ Dynamic dispatch defers spec selection until after MTI is parsed during unpack. 
 
 ## Repository Conventions in moov-io iso8583
 
-- Message struct holds spec pointer and fields map protected by mutex.
-- NewMessage validates spec and panics on invalid input.
-- Unpack locks mutex, resets fields, unpacks MTI field at index 0 first, then bitmap, then iterates field IDs 2..bitmap length.
-- Bitmap field spec defines presence bits; presence bits 1,65,129,193 indicate extended bitmaps and are skipped in field loop.
-- createField uses current spec to instantiate field objects; changing spec mid-unpack affects subsequent createField calls.
-- Clone creates new message via NewMessage with current spec then packs and unpacks; selector state must propagate for consistent behavior. Clone must copy selector so cloned.GetSpecSelector() returns non-nil when original had selector registered.
+- Message struct holds spec pointer and fields map protected by mutex; NewMessage validates spec and panics on invalid input.
+- Unpack locks mutex, resets fields, unpacks MTI field at index 0 first, then bitmap, then iterates field IDs based on bitmap length.
+- Bitmap field spec defines presence bits; presence bits indicating extended bitmaps are skipped in field loop.
+- Field instantiation uses current spec, so changing spec mid-unpack affects subsequent fields.
+- Clone creates new message via NewMessage with current spec then packs and unpacks to copy state; any dynamic-selection state must be preserved for consistent behavior in cloned instances.
 - Field String() returns string and error; always check error when reading MTI value for dispatch decisions.
-- Public API for dynamic selection follows existing getter/setter naming: `SetSpecSelector(selector SpecSelector)`, `GetSpecSelector() SpecSelector`, and convenience `SetSpecMap(specMap map[string]*MessageSpec)`. All three must hold the message mutex like existing GetSpec/Set methods.
 
 ## Design Patterns
 
-Define `type SpecSelector func(mti string) *MessageSpec` at package level near Message struct. Selector function type receives MTI string and returns spec pointer or nil. Nil indicates no matching spec and should surface as unpack error rather than silent fallback to avoid data corruption.
+Define a selector function type at package level that receives the MTI string and returns the appropriate spec pointer, or nil when no spec matches. Nil should surface as unpack error rather than silent fallback to avoid data corruption.
 
-Expose three public methods on Message following existing mutex pattern:
-- `SetSpecSelector(selector SpecSelector)` stores selector under lock.
-- `GetSpecSelector() SpecSelector` returns current selector under lock for inspection and Clone propagation.
-- `SetSpecMap(specMap map[string]*MessageSpec)` is convenience wrapper building a SpecSelector that looks up MTI in the map, for static MTI-to-spec tables common in switch configurations.
+Expose registration capability on Message following existing mutex conventions: a setter for the selector function, a getter for inspection and propagation, and a convenience that builds a selector from a static MTI-to-spec map commonly used in switch configurations. Follow existing thread-safety patterns where getters/setters hold the message mutex.
 
-Spec validation should occur at registration time and again at selection time to catch configuration errors early. Validating selected spec before swapping prevents partial unpack state corruption.
+Spec validation should occur at selection time to catch configuration errors early and prevent partial unpack state corruption. Validating selected spec before swapping is recommended.
 
-Bitmap cache must be invalidated when spec switches because different specs may define different bitmap lengths or extended bitmap handling. Reset cached bitmap field and reinitialize from new spec before unpacking bitmap or after switching.
+When spec switches during unpack, the bitmap handling must reflect the new spec. Different specs may define different bitmap lengths or extended bitmap handling, so any cached bitmap state tied to the old spec must be cleared and reinitialized from the new spec before unpacking bitmap or subsequent fields.
 
-Thread safety relies on existing message mutex held during unpack; selector invocation happens inside locked section so selector implementation should avoid blocking operations.
+Thread safety relies on existing message mutex held during unpack; selector invocation happens inside locked section so selector implementations should avoid blocking operations.
 
 ## Failure Modes
 
