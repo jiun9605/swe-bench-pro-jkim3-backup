@@ -49,7 +49,7 @@ diff --git a/lib/double_entry/transfer.rb b/lib/double_entry/transfer.rb
 index a846f90..90b44d7 100644
 --- a/lib/double_entry/transfer.rb
 +++ b/lib/double_entry/transfer.rb
-@@ -89,12 +89,101 @@ module DoubleEntry
+@@ -89,12 +89,116 @@ module DoubleEntry
          fail MismatchedCurrencies, "Mismatched currency (#{to_account.currency} <> #{from_account.currency})"
        end
        Locking.lock_accounts(from_account, to_account) do
@@ -73,14 +73,14 @@ index a846f90..90b44d7 100644
 +    # cross-entity credit that REVERSES one of those withdrawals. A reversal is a
 +    # cross-entity credit that shares its `detail` record with a cross-entity
 +    # debit (i.e. the refund of a specific withdrawal); only such credits give
-+    # back consumed allowance, and the net consumed is floored at zero. An
-+    # ordinary cross-entity deposit (no matching detail) is NOT a reversal: it
-+    # does not give back allowance and raises capacity only through the
-+    # average-balance term, so it is never counted twice. Transfers between two
-+    # accounts of the same entity (same scope) are internal moves that never
-+    # consume the cap. Both the outflow and the average balance are measured from
-+    # the lines that exist BEFORE this transfer, so the check is well-defined and
-+    # free of circularity.
++    # back consumed allowance, capped by the outflow for that same detail, and the
++    # net consumed is floored at zero. An ordinary cross-entity deposit (no
++    # matching detail) is NOT a reversal: it does not give back allowance and
++    # raises capacity only through the average-balance term, so it is never
++    # counted twice. Transfers between two accounts of the same entity (same
++    # scope) are internal moves that never consume the cap. Both the outflow and
++    # the average balance are measured from the lines that exist BEFORE this
++    # transfer, so the check is well-defined and free of circularity.
 +    def ensure_within_withdrawal_limit(amount, from_account, to_account)
 +      ratio = from_account.withdrawal_limit_ratio
 +      return unless ratio
@@ -99,20 +99,32 @@ index a846f90..90b44d7 100644
 +        partner_scope: from_account.scope_identity,
 +      )
 +
-+      outflow_cents = cross.debits.sum(:amount)
++      total_outflow_cents = -cross.debits.sum(:amount)
 +
-+      # Reversals: cross-entity credits whose detail matches a cross-entity
-+      # debit's detail (the refund of a specific withdrawal). They give back the
-+      # allowance the matching withdrawal consumed.
-+      debit_details = cross.debits.where.not(detail_id: nil).pluck(:detail_type, :detail_id)
-+      reversal_cents = 0
-+      unless debit_details.empty?
-+        reversal_cents = cross.credits.where.not(detail_id: nil).to_a.sum do |line|
-+          debit_details.include?([line.detail_type, line.detail_id]) ? line[:amount] : 0
-+        end
++      # Per-detail outflow (positive cents) for debits that have a detail.
++      outflow_by_detail = Hash.new(0)
++      cross.debits.where.not(detail_id: nil).each do |line|
++        key = [line.detail_type, line.detail_id]
++        outflow_by_detail[key] += -line[:amount]
 +      end
 +
-+      net_consumed_cents = [-outflow_cents - reversal_cents, 0].max
++      # Per-detail reversal (positive cents) but only for details that had a debit in window.
++      reversal_by_detail = Hash.new(0)
++      cross.credits.where.not(detail_id: nil).each do |line|
++        key = [line.detail_type, line.detail_id]
++        next unless outflow_by_detail.key?(key)
++        reversal_by_detail[key] += line[:amount]
++      end
++
++      # Cap each detail's reversal by its own outflow — surplus refund for one
++      # detail cannot offset unrelated outflow.
++      capped_reversal_cents = 0
++      outflow_by_detail.each do |key, out_cents|
++        rev_cents = reversal_by_detail[key] || 0
++        capped_reversal_cents += [rev_cents, out_cents].min
++      end
++
++      net_consumed_cents = [total_outflow_cents - capped_reversal_cents, 0].max
 +      withdrawn = Money.new(net_consumed_cents, from_account.currency)
 +
 +      avg_balance_cents = time_weighted_average_balance(own_lines, window_start, now)
