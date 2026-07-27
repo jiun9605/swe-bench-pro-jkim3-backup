@@ -13,13 +13,13 @@ task_complexity = "single_skill"
 [metadata]
 author_name = "Jiun Kim"
 author_email = "jkim3@meta.com"
-difficulty = "medium"
+difficulty = "hard"
 category = "debugging"
 category_usecase = "validation_bugs"
 category_subdomain = "finance_and_accounting"
 reward_type = "binary"
 languages = ["go"]
-tags = ["debugging", "swe-bench-pro", "skills", "go", "validation", "SWEBench-External", "SWEBench-Skills", "skill:fedwire-bfc-validation-contract", "single_skill"]
+tags = ["debugging", "swe-bench-pro", "skills", "go", "validation", "edge-case-handling", "cross-bfc-isolation", "SWEBench-External", "SWEBench-Skills", "skill:fedwire-bfc-validation-contract", "single_skill"]
 
 [verifier]
 timeout_sec = 3600.0

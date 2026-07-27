@@ -27,7 +27,7 @@ index 767ec4e..d499401 100644
 +	if fwm.ServiceMessage == nil {
 +		return fieldError("ServiceMessage", ErrFieldRequired)
 +	}
-+	if fwm.ServiceMessage.LineOne == "" {
++	if strings.TrimSpace(fwm.ServiceMessage.LineOne) == "" {
 +		return fieldError("ServiceMessage.LineOne", ErrFieldRequired)
 +	}
 +	return nil
