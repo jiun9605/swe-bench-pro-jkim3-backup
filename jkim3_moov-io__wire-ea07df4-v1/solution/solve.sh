@@ -30,6 +30,9 @@ index 767ec4e..d499401 100644
 +	if strings.TrimSpace(fwm.ServiceMessage.LineOne) == "" {
 +		return fieldError("ServiceMessage.LineOne", ErrFieldRequired)
 +	}
++	if err := fwm.ServiceMessage.Validate(); err != nil {
++		return err
++	}
 +	return nil
 +}
 +

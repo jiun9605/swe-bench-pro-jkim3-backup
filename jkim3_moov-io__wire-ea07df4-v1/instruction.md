@@ -9,7 +9,7 @@ When validating a FedWire message with BusinessFunctionCode set to Service Messa
 ## Expected Behavior
 
 - Validating an SVC message without ServiceMessage tag must return a validation error.
-- Validating an SVC message with ServiceMessage tag present but without meaningful LineOne content must return a validation error. Per FedWire field inclusion rules, whitespace-only content should be treated as missing.
+- Validating an SVC message with ServiceMessage tag present but without meaningful LineOne content must return a validation error.
 - Existing valid SVC messages with ServiceMessage populated must continue to pass validation.
 - Existing behavior for other business function codes must be preserved — messages for other BFCs that do not require ServiceMessage should continue to pass without it, and existing prohibited tag enforcement for SVC should remain intact.
 
