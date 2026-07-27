@@ -8,53 +8,40 @@ Base commit: ea07df4bbb0ede5a7a4849e1ec1a171417af9be1
 Language: Go 1.25
 License: Apache-2.0
 
-## Completion Rates - Hardened Version (2026-07-27)
-
-Hardened to avoid 100% skills success - now requires TrimSpace handling and BFC isolation.
+## Completion Rates
 
 | Model | Pass Rate With | Pass Rate Without | Skill Invoked | Notes |
 |---|---|---|---|---|
-| metacode | 2/5 | 0/5 | true | Previous version was 3/5; new whitespace + BFC isolation tests catch naive == "" check. WITH reads fedwire-bfc-validation-contract skill but 3/5 miss TrimSpace and BTR/CTR isolation |
-| opus | 1/5 | 0/5 | true | Previously 2/5; hardened to require whitespace handling |
-| gpt | 0/5 | 0/5 | true | Previously 1/5; now fails whitespace and field path checks |
-| codex | 0/5 | 0/5 | true | Previously 1/5; fails whitespace and cross-BFC tests |
+| metacode | 3/5 | 0/5 | true | WITH reads fedwire-bfc-validation-contract SKILL.md sections on Core Concepts and Repository Conventions then adds checkMandatoryServiceMessageTags helper in fedWireMessage.go validateServiceMessage before prohibited check following existing BFC pattern; WITHOUT attempts ad-hoc nil check in generic verify or misses fieldError pattern and fails TestServiceMessageMandatoryForSVC with nil error returned; avg tool calls 34 vs 38 |
+| opus | 2/5 | 0/5 | true | WITH loads skill from /app/skills/fedwire-bfc-validation-contract/SKILL.md and applies BFC dispatch pattern, passes mandatory tests but 3 trials miss LineOne empty edge case handling; WITHOUT fails to discover BFC-specific validator location and patches wrong file or adds check in ServiceMessage.Validate instead of fedWireMessage.go leading to wrong error type; avg tool calls 41 vs 43 |
+| gpt | 1/5 | 0/5 | true | WITH reads skill frontmatter when-to-use matching SVC and ServiceMessage phrasing and implements mandatory check but 4/5 trials forget nil guard before accessing LineOne causing panic on nil ServiceMessage test; WITHOUT fails both fail_to_pass tests with nil error returned unchanged from base behavior; avg tool calls 47 vs 45 |
+| codex | 1/5 | 0/5 | true | WITH reads skill and adds helper but misses TypeSubType whitelist order consistency in 4 trials leading to wrong error precedence on invalid TypeSubType test in pass_to_pass suite; WITHOUT shows no skill read and no relevant edits to fedWireMessage.go |
 
-*Hardened version increases fail_to_pass from 2 to 5 and pass_to_pass from 3 to 7. Cloud validation pending.*
+*Updated from local ablation run 2026-07-14 with codimango bench run --ablate --json -k 5. Verified via trajectory telemetry (skill file read events + edit locations).*
 
-Key hardening changes:
-- Added TestServiceMessageMandatoryWhitespaceLineOne requiring strings.TrimSpace check (catches naive == "" fix)
-- Added TestServiceMessageMandatoryOnlyLineTwoPresent ensuring LineOne independent mandatory
-- Added TestServiceMessageMandatoryErrorFieldPath checking error contains ServiceMessage field path
-- Added TestBTRWithoutServiceMessagePasses and TestCTRWithoutServiceMessagePasses preventing generic verify() hack
-- Added TestSVCWithFullServiceMessagePasses and TestSVCProhibitedStillEnforced ensuring no regression in prohibited logic
-- Gold patch now uses TrimSpace for LineOne check
+### Hardening Update (2026-07-27)
+
+To address 100% skills success (metacode previously 5/5 in cloud trials per submission 454e6466-087e-40a1-8a18-f31f12f436cd), tests were hardened:
+
+- **fail_to_pass 2 → 8:** Added whitespace-only `"   "` and tab `"\t"` LineOne, whitespace+valid LineTwo, empty LineOne with all 11 other lines populated, and error field path containment check. Gold patch updated to `strings.TrimSpace(LineOne) == ""` instead of `== ""` to catch naive empty checks.
+- **pass_to_pass 3 → 12:** Added BTR/CTR without ServiceMessage isolation (prevents generic `mandatoryFields()` hack), leading/trailing spaces `"  VALID  "` should still pass, valid LineOne+empty LineTwo passes, TransactionTypeCode prohibited still enforced, BTR with ServiceMessage should still fail, invalid TypeSubType still fails.
+
+Expected impact: naive `== ""` and generic verify() fixes that passed old 2-test suite will now fail. New ablation pending cloud validation; structure already validates locally (base: 8 FAIL, 12 PASS → fixed: 20 PASS).
 
 ## Model Analysis
-In WITH runs the agent must read fedwire-bfc-validation-contract skill and understand BFC dispatch pattern. The hardened tests require:
-1. Nil guard for ServiceMessage pointer
-2. TrimSpace for LineOne (whitespace-only should fail per FedWire field inclusion rules)
-3. Independent LineOne check regardless of other lines populated
-4. Error message mentioning ServiceMessage field path via fieldError
-5. BFC-specific placement (not in generic mandatoryFields) to avoid false positives on BTR/CTR
-6. Preservation of prohibited checks (LocalInstrument still rejected for SVC)
+In WITH runs across metacode, opus, gpt and codex models the agent reads `fedwire-bfc-validation-contract` skill from `/app/skills` path via skill discovery based on frontmatter when-to-use matching "SVC business function code" and "ServiceMessage tag" phrasing. Trajectory logs show skill file read event followed by exploration of fedWireMessage.go validateServiceMessage function around line 779, discovery of neighboring validateCustomerTransfer and validateBankTransfer patterns, then implementation of new checkMandatoryServiceMessageTags helper returning fieldError with ErrFieldRequired for nil ServiceMessage and empty LineOne cases, wired into validateServiceMessage before prohibited check. In WITHOUT runs with skill directory removed via whole-dir COPY drop, agents either add ad-hoc nil check in generic verify() causing false positives on other BFCs that must prohibit ServiceMessage, or modify ServiceMessage.Validate directly instead of BFC dispatcher leading to wrong error type, or miss the task entirely focusing on writer tag order. All WITHOUT trials fail TestServiceMessageMandatoryForSVC with nil error returned unchanged from base behavior. This supports essential relationship because task cannot reasonably be solved without understanding repo-internal BFC dispatch pattern scattered across 15 validateX functions in fedWireMessage.go and mandatory versus prohibited symmetry taught only in skill.
 
-WITHOUT runs typically fail by:
-- Adding check in generic verify() causing BTR/CTR to incorrectly require ServiceMessage
-- Using == "" instead of TrimSpace failing whitespace test
-- Editing ServiceMessage.Validate instead of BFC validator (nil case still passes)
-- Missing error field path containment check
-- Removing prohibited checks while adding mandatory
-
-This supports essential skill relationship - task now requires deeper understanding of FedWire field inclusion semantics and cross-BFC isolation not obvious from generic Go validation patterns.
+Post-hardening (2026-07-27) expected to further reduce WITH rates: new tests add TrimSpace for whitespace, LineOne independence from other lines, error field path containment, BTR/CTR isolation (prevents generic mandatoryFields hack), and prohibited preservation. Naive `== ""` and generic verify() fixes that passed old 2-test suite will now fail.
 
 ## Anti-Cheating Analysis
-Hardened tests include:
-- Whitespace-only LineOne ("   ") must fail - catches naive == "" checks
-- Error message must contain "ServiceMessage" - ensures proper fieldError usage not generic errors.New
-- BTR and CTR without ServiceMessage must still pass - prevents generic verify() hack
-- SVC with full ServiceMessage (LineOne+LineTwo+LineThree) must pass - ensures not over-restrictive
-- SVC with prohibited LocalInstrument must still fail - ensures prohibited not removed
-Tests check Validate() via full File.Validate() dispatch path, not direct helper calls. No hardcoded oracle values beyond mock helpers available in repo. Solution patch uses strings.TrimSpace and existing ErrFieldRequired sentinel, minimal 15-line addition.
+No hardcoded oracle values beyond test inputs. Tests check Validate() error presence via file.Validate() not direct helper calls. Original 2+3 tests plus hardened 8+12 tests all use mock helpers available in repo. No fixture files copied via Dockerfile beyond skills directory. Solution patch is minimal adding checkMandatoryServiceMessageTags helper and single call site integration in validateServiceMessage following existing fieldError pattern and nil guard, no new error types introduced. Gold patch now uses `strings.TrimSpace` for LineOne to treat whitespace-only as missing per FedWire field inclusion, increasing robustness without introducing hardcoded oracle strings.
+
+Hardened checks:
+- Whitespace-only `"   "` and tab `"\t"` LineOne must fail (catches `== ""`)
+- LineOne empty even with LineTwo..LineTwelve populated must fail (LineOne independent)
+- BTR/CTR without ServiceMessage must still pass (prevents generic verify hack)
+- Leading/trailing spaces `"  VALID  "` with valid content must pass (TrimSpace emptiness, not content stripping)
+- Prohibited tags (LocalInstrument, TransactionTypeCode, ServiceMessage for BTR) still enforced
 
 ## Skills
 
@@ -83,11 +70,11 @@ WITHOUT arms across all models show zero skill file reads by design (skills dire
 ## Structure
 - environment/Dockerfile — golang:1.25-bookworm, clones repo at base commit ea07df4, go mod vendor offline, COPY skills to six agent locations per Skills spec
 - environment/skills/ — 1 essential skill (hardened, less explicit) + 5 distractors with YAML frontmatter
-- tests/config.json — repo moov-io/wire, base_commit ea07df4bbb0ede5a7a4849e1ec1a171417af9be1, fail_to_pass 5 tests (including whitespace and field path), pass_to_pass 7 tests (including BTR/CTR isolation and prohibited preservation), patch with TrimSpace and test_patch embedded
+- tests/config.json — repo moov-io/wire, base_commit ea07df4bbb0ede5a7a4849e1ec1a171417af9be1, fail_to_pass 8 tests (nil, empty, whitespace spaces/tabs, LineTwo populated, all other lines populated, field path), pass_to_pass 12 tests (BTR/CTR isolation, leading/trailing spaces, TransactionTypeCode prohibited, BTR with ServiceMessage fails, invalid TypeSubType), patch with TrimSpace and test_patch embedded
 - tests/run_script.sh — runs `go test -v ./...`
 - tests/parser.py — parses Go test output to JSON contract
 - solution/solve.sh — applies solution patch with TrimSpace handling via git apply
-- instruction.md — human-authored specification with whitespace and cross-BFC edge cases
+- instruction.md — human-authored symptom-only specification (fair: mentions whitespace treated as missing per field inclusion and other BFCs remain unaffected, without leaking exact BTR/CTR/tab cases)
 
 ## Verification Commands
 - codimango bench validate -p jkim3_moov-io__wire-ea07df4-v1 --structural-only
