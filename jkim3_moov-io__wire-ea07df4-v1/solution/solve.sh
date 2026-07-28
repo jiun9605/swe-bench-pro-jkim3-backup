@@ -5,10 +5,10 @@ cd /app 2>/dev/null || cd /testbed 2>/dev/null
 
 cat > solution_patch.diff << '__SOLUTION__'
 diff --git a/fedWireMessage.go b/fedWireMessage.go
-index 767ec4e..d499401 100644
+index 767ec4e..d6ec940 100644
 --- a/fedWireMessage.go
 +++ b/fedWireMessage.go
-@@ -782,12 +782,27 @@ func (fwm *FEDWireMessage) validateServiceMessage() error {
+@@ -782,12 +782,30 @@ func (fwm *FEDWireMessage) validateServiceMessage() error {
  		return fieldError("TypeSubType", NewErrBusinessFunctionCodeProperty("TypeSubType", typeSubType,
  			fwm.BusinessFunctionCode.BusinessFunctionCode))
  	}
