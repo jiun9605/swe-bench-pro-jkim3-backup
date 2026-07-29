@@ -3,6 +3,8 @@
 ## Summary
 The ISO 8583 library currently requires a single static message specification per message instance. In production payment switches, field definitions vary by Message Type Indicator (MTI). The library must support choosing a different message specification during unpack based on the MTI value read from the incoming message.
 
+<!-- dummy trigger S690394 iso task 2026-07-28 -->
+
 ## Problem
 When unpacking a raw ISO 8583 message, the parser uses one fixed specification for all fields. This prevents handling real-world scenarios where the same data element number has different structures depending on the MTI. For example, data element 48 must parse as one structure for MTI 0800 and as a different structure for MTI 0100, using the same message object type.
 
