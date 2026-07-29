@@ -3,6 +3,8 @@
 ## Summary
 moov-io/wire is a Go library for FedWire Funds Service message parsing and validation. Currently messages using the Service Message business function code pass validation even without a ServiceMessage tag, which does not align with FedWire specification.
 
+<!-- dummy trigger for S690394 re-validation per SEV 2026-07-28 -->
+
 ## Problem
 When validating a FedWire message with BusinessFunctionCode set to Service Message and no ServiceMessage tag present, validation returns no error today. Per FedWire specification, ServiceMessage tag {9000} is mandatory for SVC.
 
