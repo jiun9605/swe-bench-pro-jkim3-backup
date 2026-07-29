@@ -25,3 +25,4 @@ COPY skills /app/.agents/skills
 COPY skills /app/.claude/skills
 
 RUN mkdir -p /logs
+# dummy change to trigger S690394 re-validation Wed Jul 29 09:53:33 AM PDT 2026
