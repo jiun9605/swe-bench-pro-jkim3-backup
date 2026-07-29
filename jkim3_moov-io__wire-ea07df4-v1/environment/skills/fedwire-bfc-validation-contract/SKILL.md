@@ -16,9 +16,11 @@ A FEDWireMessage aggregates approximately 40 optional tag structs, each represen
 Business Function Code values are three-letter codes defined as constants:
 - BTR Bank Transfer, CKS Check Same Day Settlement, CTP Customer Transfer Plus, CTR Customer Transfer, DEP Deposit to Sender's Account, DRB Bank Drawdown Request, DRC Customer Corporate Drawdown Request, DRW Drawdown Response, FFR Fed Funds Returned, FFS Fed Funds Sold, SVC Service Message
 
-Each BFC represents a distinct business scenario with its own allowed tag sets defined in FedWire operating circulars and Format Reference Guide section 15. TypeSubType combinations are further restricted per BFC via whitelists.
+Each BFC represents a distinct business scenario with its own allowed tag sets defined in FedWire operating circulars and Format Reference Guide section 15. TypeSubType combinations are further restricted per BFC via whitelists. For example, SVC (Service Message) uses tag {9000} ServiceMessage which carries free-text service information across twelve optional lines LineOne through LineTwelve, with LineOne being the primary required line per its own field inclusion rule. BTR (Bank Transfer) and CTR (Customer Transfer) have different allowed tag sets that do not include ServiceMessage in their valid combinations per the format guide.
 
-A FEDWireMessage includes many optional tags; common mandatory tags are enforced for all messages regardless of BFC, while additional BFC-specific rules apply after dispatch.
+A FEDWireMessage includes many optional tags; common mandatory tags are enforced for all messages regardless of BFC, while additional BFC-specific rules (mandatory presence, prohibited absence, TypeSubType whitelist) apply after dispatch in BFC-specific validators.
+
+ServiceMessage struct validation in serviceMessage.go checks LineOne presence and alphanumeric/length constraints, and file inclusion helpers in other tags often use strings package for content checks.
 
 ## Repository Conventions in moov-io/wire
 
@@ -52,6 +54,6 @@ Validators are wired in `validateBusinessFunctionCode()` switch; order of checks
 
 ## Testing Strategy
 
-Define test functions in package wire using mock helpers like `mockSenderSupplied()`, `mockTypeSubType()`, `mockBusinessFunctionCode()` to construct minimal valid FEDWireMessage, then modify specific fields to trigger error conditions. Use `NewFile()` then `file.AddFEDWireMessage(fwm)` then `file.Validate()` to trigger full validation chain including BFC dispatch.
+Define test functions in package wire using mock helpers like `mockSenderSupplied()`, `mockTypeSubType()`, `mockBusinessFunctionCode()`, and for SVC specifically `createMockServiceMessageData()` and `mockServiceMessage()` to construct minimal valid FEDWireMessage, then modify specific fields to trigger error conditions. Use `NewFile()` then `file.AddFEDWireMessage(fwm)` then `file.Validate()` to trigger full validation chain including BFC dispatch via `validateBusinessFunctionCode()`.
 
-Cover TypeSubType valid and invalid paths, and prohibited tag presence/absence. Use `go test -run` for targeted execution and full suite for regression.
+For SVC, valid TypeSubType is "1001" (10+01 RequestReversal) per `svcTypeSubTypes` whitelist in associatedTypeSubTypes.go; "1000" (10+00 BasicFundsTransfer) is valid for BTR/CTR but not SVC. Cover TypeSubType valid and invalid paths, prohibited tag presence/absence, and ServiceMessage presence cases. Use `go test -run` for targeted execution and full suite for regression.
