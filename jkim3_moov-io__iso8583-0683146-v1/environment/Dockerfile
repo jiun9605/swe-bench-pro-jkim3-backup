@@ -29,3 +29,4 @@ COPY skills /app/.agents/skills
 COPY skills /app/.claude/skills
 
 RUN mkdir -p /logs
+# dummy trigger for iso task S690394 Wed Jul 29 09:59:02 AM PDT 2026
