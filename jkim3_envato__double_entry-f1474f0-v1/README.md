@@ -159,3 +159,4 @@ pass, so the tests are not false-negative).
 - `instruction.md` is now final human-written spec — see `SPEC_CONTRACT.md` for source of truth.
 - Calibration: after underspecifying (removed trajectory reconstruction hint and detail-mechanism hint), difficulty recovered: avocado 1/5, gpt 0/5 vs previous 5/5.
 
+# trigger Thu Jul 30 11:45:00 AM PDT 2026
