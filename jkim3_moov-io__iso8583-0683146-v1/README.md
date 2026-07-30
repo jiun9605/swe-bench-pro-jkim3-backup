@@ -10,54 +10,49 @@ License: Apache-2.0
 
 ## Completion Rates
 
-| Model | Pass Rate With | Pass Rate Without | Skill Invoked | Notes |
-|---|---|---|---|---|
-| opus | 4/5 | 0/5 | true | Measured cloud ablation at cb9bdcb (2026-07-24). WITH: reads iso8583-spec-switching skill, implements SpecSelector type, mutex-safe setters, unpack hook after MTI parse with bitmap cache reset via resetBitmap() and Clone propagation. WITHOUT: fails to discover hook point (all skills removed via Dockerfile whole-dir COPY drop). Genuinely load-bearing — delta 4/5. Verified via trajectory telemetry (skill read events). |
-| metacode (Avocado) | 0/5 | 0/5 | false | Measured cloud ablation at 577d109 (2026-07-29) post de-prescription fix 96060ae after S690394 mitigation. Instruction de-prescribed to symptom-only (API names kept for compilation, hook point removed). WITH and WITHOUT both 0/5 in this small sample due to S690394 infra 500 sandbox failures (S689897) and 407 clone - not representative. Local verification for shipped artifact (96060ae instruction): base fails to build without SetSpecSelector (fail_to_pass), fixed passes 11/11. Real load-bearing requires fresh k=5 after SEV mitigation. |
-| codex | 0/5 | 0/5 | true | Measured cloud ablation at cb9bdcb and 577d109. WITH and WITHOUT both 0-1/5, Clone-copies-selector discriminator, not load-bearing. |
+| Model | Pass Rate With | Pass Rate Without | Notes |
+|---|---|---|---|
+| opus | 4/5 | 0/5 | Measured cloud ablation at cb9bdcb (2026-07-24). WITH reads iso8583-spec-switching skill and implements SpecSelector type, mutex-safe setters, unpack hook after MTI parse with bitmap cache reset via resetBitmap() and Clone propagation. WITHOUT fails to discover hook point (all skills removed via Dockerfile). Genuinely load-bearing — delta 4/5. |
+| metacode (Avocado) | 4/5 | 4/5 | Measured cloud ablation at cb9bdcb (2026-07-24). Delta 0 flagged suspect "skill unused". Telemetry 8/10 = 4/5 WITH + 4/5 WITHOUT. WITH trajectories show zero reads of essential skill — solves from instruction alone because instruction at cb9bdcb prescribed full control flow: "During unpack, after MTI field is parsed, invoke selector", "result determines spec for remaining fields", "preserve static when unregistered", "Clone must copy selector". NOT load-bearing at cb9bdcb — this is the critical ablation issue. |
+| codex | 0/5 | 1/5 | Measured cloud ablation at cb9bdcb — pre-fix. WITH 0/5 vs WITHOUT 1/5, both arms fail. Clone-copies-selector discriminator, not load-bearing. |
 
-*All numbers are measured cloud runs, no projections. Historical local 2026-07-14 (metacode 3/5 vs 0/5) contradicted cloud and is in git history. Shipped artifact is commit 96060ae de-prescribed instruction (symptom-only: API names SetSpecSelector/GetSpecSelector/SetSpecMap/SpecSelector kept for compilation, but hook point "During unpack, after MTI field is parsed, invoke selector" removed, replaced with generic "choosing different spec during unpack based on MTI value, same message object handling multiple MTI variants where same DE has different definitions (e.g., DE48 differs between 0800 and 0100), MTI-based selection at minimum" and "Specs with different bitmap layouts" / "Cloned messages retaining MTI-dependent handling" without prescribing resetBitmap() order). All repo-internal details (hook at unpack after MTI index 0 before bitmap, field instantiation uses current spec, bitmap cache must be cleared via resetBitmap() before bitmap unpack, Validate selected spec, nil should error, Clone must preserve selector) remain only in essential skill iso8583-spec-switching. Previous delta-0 for metacode at cb9bdcb was due to instruction prescribing full control flow; fix applied in 96060ae specifically to restore load-bearing. Re-measurement blocked by S690394 (new commits not picked up) and S689897 (500 sandbox). GitHub origin/main at 577d109+ contains fix; fresh k=5 ablation pending SEV mitigation. Structural PASS, contamination LOW at cb9bdcb (Gemini NOT_FOUND pending), oracle 3/3 validated at cb9bdcb and locally at 96060ae (11/11 PASS after fix, base fails to build).* 
+*All numbers above are measured cloud runs at cb9bdcb, no projections.*
 
-*Note: Skill Invoked column per canonical shape: true if trajectory shows Read on essential skill path /app/skills/iso8583-spec-switching/SKILL.md, false otherwise. For cb9bdcb metacode WITH 4/5, telemetry showed zero reads of essential skill (flagged suspect "skill unused"), indicating instruction alone sufficient - root cause fixed in 96060ae.*
+*Fix for delta-0 applied in 96060ae (2026-07-28): instruction.md de-prescribed to symptom-only — keeps required API names SetSpecSelector/GetSpecSelector/SetSpecMap/SpecSelector for compilation (test file references them, build fails "SetSpecMap undefined" otherwise), but removes hook-point prescription: now only "choosing different spec during unpack based on MTI value, same message object handling multiple MTI variants where same DE has different definitions (e.g., DE48 differs between 0800 and 0100), MTI-based selection at minimum" plus generic edge cases "Specs with different bitmap layouts" / "Cloned messages retaining MTI-dependent handling" without prescribing resetBitmap() or spec-swap order. Essential skill iso8583-spec-switching remains sole source for repo-internal details: unpack locks mutex, MTI at index 0 first then bitmap then loop, field instantiation uses current spec so mid-unpack swap affects remaining fields, bitmap cache must be cleared via resetBitmap() before bitmap unpack (required for TestDynamicSpecInvalidBitmapLength), Validate selected spec, nil should error, Clone must preserve selector.*
+
+*Re-measurement to confirm WITHOUT drops from 4/5 to 0/5 after fix was blocked by SEV S690394 "New commits are not being picked up for execution/validation" (L3, owner Colton Quan, mitigated 2026-07-29 20:28, now Cleanup, related S689822 Nest migration + S690301 GitHub SSO XDB lag D113800121). GitHub origin/main at b1d0d68/95c2f8d contains fix, but Codimango DB Commit SHA still cb9bdcb24b6 as of 2026-07-30 17:33 UTC even after force rerun — jobs still run on old commit. SEV comment says team ensures broken tasks are fixed and asks to ensure codimango_ado_access GK passes (checked: jkim3 PASS via rollout 51%). Fresh k=5 ablation pending full sync. Wire task shows same pattern: GitHub at 59bc7ef but Codimango at 058c4b3. Structural PASS at current, contamination LOW/NOT_FOUND pending Gemini at cb9bdcb, oracle 3/3 validated at cb9bdcb.*
 
 ## Model Analysis
 In WITH runs at cb9bdcb (measured):
 
-- **Opus (load-bearing):** reads `iso8583-spec-switching` skill from `/app/skills` via frontmatter when-to-use matching "MTI-dependent field parsing". Trajectory shows skill read then SpecSelector type, thread-safe SetSpecSelector/GetSpecSelector/SetSpecMap under mutex, unpack hook after MTI parse to invoke selector and swap spec, bitmap cache invalidation via resetBitmap(), Validate on selected spec, and Clone propagation. WITHOUT arm with skills directory removed via Dockerfile whole-dir COPY drop fails to discover hook point at message.go unpack() after MTI read and before bitmap loop. Delta 4/5 genuinely load-bearing, no suspect flag.
+- **Opus (load-bearing):** reads `iso8583-spec-switching` skill via frontmatter "MTI-dependent field parsing". Implements SpecSelector type, thread-safe SetSpecSelector/GetSpecSelector/SetSpecMap, unpack hook after MTI parse to swap spec, bitmap cache invalidation via resetBitmap(), Validate, Clone propagation. WITHOUT fails to discover hook point. Delta 4/5 genuinely load-bearing.
 
-- **Metacode/Avocado (NOT load-bearing at cb9bdcb):** solves 4/5 both arms, 8/10 total telemetry = 4 WITH + 4 WITHOUT, delta 0 flagged suspect "skill unused". WITH trajectories show zero reads of essential skill — solves from instruction alone because instruction previously spelled out "During unpack, after the MTI field is parsed, invoke selector" + "result determines spec for remaining fields" + "preserve static when unregistered" + "Clone must copy selector". That full control flow makes skill unnecessary for capable model. This is the critical ablation issue.
+- **Metacode/Avocado (NOT load-bearing at cb9bdcb):** solves 4/5 both arms, 8/10 total = 4+4, delta 0 flagged suspect. WITH shows zero reads of essential skill — solves from instruction alone because instruction prescribed full control flow. This is the critical issue requiring refresh. Fix in 96060ae de-prescribes instruction to symptom-only; skill becomes sole source for hook location and bitmap handling. Expect WITHOUT to drop to 0/5 after SEV mitigation.
 
-Fix applied in 96060ae: instruction now symptom-only — API names + "choosing different spec during unpack based on MTI value, same message object handling multiple MTI variants where same DE has different definitions (e.g., DE48 differs between 0800 and 0100), MTI-based selection at minimum" + generic edge cases "Specs with different bitmap layouts" / "Cloned messages retaining MTI-dependent handling" without prescribing hook point or resetBitmap() order. Skill remains sole source for repo-internal details that are required for passing: unpack locks mutex/resets fields/MTI at index 0 then bitmap then loop, field instantiation uses current spec so mid-unpack swap affects remaining fields, bitmap cache must be cleared and reinitialized from new spec (resetBitmap()) before bitmap unpack (required for TestDynamicSpecInvalidBitmapLength), Validate selected spec at selection time, nil should error not silent fallback, Clone must preserve selector reference, selector invoked inside locked section.
-
-Clone-copies-selector (TestDynamicSpecCloneCopiesSelector) is the discriminating edge case: codex and opus fail exactly that test in some trials, confirmed as reasoning failures via trajectory logs (real tool use, no infra). Supports essential relationship once instruction de-prescribed — task cannot be solved without skill knowledge of hook point and bitmap invalidation, not derivable from public ISO8583 docs in <2min. This also addresses MEDIUM novelty flag root cause (GitHub Discussion #242 framing same problem + method-by-method spec enabling recalled one-pass).
-
-- **Codex:** 0/5 vs 1/5 both fail, not load-bearing.
-
-Post-fix re-measurement (expect metacode 4/5 vs 0/5, skill read true) is blocked by active SEV S690394 "New commits are not being picked up for execution/validation" (L3 In Progress, owner Colton Quan, related S689822 Nest migration). GitHub origin/main at 59bc7ef contains fix, but Codimango DB Commit SHA still cb9bdcb24b6 as of 20:24 UTC 2026-07-28, rerun jobs still on old commit. Per SEV, tentative fixes landed, team asks to retry revalidation after mitigation. Fresh ablation will be attached once SEV mitigates.
+Clone-copies-selector (TestDynamicSpecCloneCopiesSelector) is discriminator: fails across models for real reasoning, not infra.
 
 ## Anti-Cheating Analysis
-No hardcoded oracle values beyond round-trip test inputs. Tests use computed Pack output then Unpack and assert GetString equality, closing format ambiguity. Nil fallback and unknown MTI tests assert error presence with substring check on "no spec" and "bitmap" to avoid brittle exact match while still verifying specific failure mode not generic error. No fixture files copied via Dockerfile beyond skills directory. No test_patch modifies production code beyond adding new test file message_dynamic_spec_test.go with 9 fail_to_pass tests covering core MTI0800/0100 roundtrips, backward compat, nil fallback, unknown MTI, missing MTI, clone copies selector, concurrent unpack with race detection, invalid bitmap length handling, and pack behavior symmetry. Solution patch is 50 lines minimal adding SpecSelector type, thread-safe setters/getter under existing mutex, unpack-time spec swap with Validate call, bitmap cache reset via resetBitmap(), and Clone propagation following existing mutex conventions. No eval plumbing references in skill or instruction.
+No hardcoded oracle values beyond round-trip test inputs. Tests use computed Pack output then Unpack and assert GetString equality. Nil fallback and unknown MTI tests assert error presence with substring check on "no spec" and "bitmap" to avoid brittle exact match. No fixture files copied via Dockerfile beyond skills directory. No test_patch modifies production code beyond adding new test file message_dynamic_spec_test.go with 9 fail_to_pass tests covering core MTI0800/0100 roundtrips, backward compat, nil fallback, unknown MTI, missing MTI, clone copies selector, concurrent unpack with race detection, invalid bitmap length handling, and pack behavior symmetry. Solution patch is 50 lines minimal adding SpecSelector type, thread-safe setters/getter under existing mutex, unpack-time spec swap with Validate call, bitmap cache reset via resetBitmap(), and Clone propagation. No eval plumbing references in skill or instruction.
 
 ## Skills
 
 ### Skills Usage
 See Completion Rates table above for per-model Pass Rate With, Pass Rate Without, and Notes with trajectory evidence.
 
-Trajectory evidence from local ablation run 2026-07-14:
-- metacode WITH 3/5 pass: trajectory shows Read tool on `/app/skills/iso8583-spec-switching/SKILL.md` at step 3, then Edit on message.go adding SpecSelector type at line 27, SetSpecSelector method after GetSpec, unpack modification after MTI unpack with spec swap and resetBitmap call. WITHOUT arm with skill directory removed shows no skill read events and fails at TestDynamicSpecMTI0800 with assertion expecting "ABCDEFGHIJ" but got empty or wrong DE48 structure.
-- opus WITH 2/5 pass: similar skill read pattern, 3 failures due to missing Clone propagation edge case not implemented in those trials.
-- gpt WITH 1/5 pass: skill read occurs but implementation incomplete in 4 trials, only 1 trial gets full patch correct including Clone.
+Trajectory evidence from cloud at cb9bdcb:
+- opus WITH 4/5: Read on /app/skills/iso8583-spec-switching/SKILL.md, then Edit adding SpecSelector type, SetSpecSelector after GetSpec, unpack modification after MTI with spec swap and resetBitmap, Clone propagation.
+- metacode WITH 4/5: zero skill file reads, solves from instruction alone due to prescriptive steps.
 
-WITHOUT arms across all models show zero skill file reads by design (skills directory removed via Dockerfile whole-dir COPY drop removing essential + distractors together, documented per G16), confirming ablation scope isolates skill availability change only.
+WITHOUT arms with skills directory removed via Dockerfile whole-dir COPY drop show zero skill reads by design (skills directory removed), confirming ablation scope isolates skill availability.
 
 ### Skills Summary
 
 | Skill | Relationship | Skill Type | Skill Composition | Source | Distractor Level |
 |---|---|---|---|---|---|
 | iso8583-spec-switching | essential | domain_knowledge | atomic_skill | authored | - |
-| iso8583-composite-encoding | distractor | n/a | n/a | authored | 2 |
-| iso8583-bitmap-optimization | distractor | n/a | n/a | authored | 2 |
-| iso8583-yaml-serialization | distractor | n/a | n/a | authored | 1 |
+| iso8583-composite-encoding | distractor | domain_knowledge | atomic_skill | authored | 2 |
+| iso8583-bitmap-optimization | distractor | domain_knowledge | atomic_skill | authored | 2 |
+| iso8583-yaml-serialization | distractor | domain_knowledge | atomic_skill | authored | 1 |
 
 ## Structure
 - environment/Dockerfile — golang:1.25-bookworm, clones repo at base commit, go mod vendor offline, COPY skills to six agent locations per Skills spec (/app/skills, /app/.opencode/skills, /app/.codex/skills, /app/.metacode/skills, /app/.agents/skills, /app/.claude/skills)
@@ -74,5 +69,3 @@ WITHOUT arms across all models show zero skill file reads by design (skills dire
 - codimango bench validate -p ... --contamination-only
 - codimango bench run -p ... -a oracle -k 1
 - codimango bench run -p ... -a metacode --ablate --json
-
-
