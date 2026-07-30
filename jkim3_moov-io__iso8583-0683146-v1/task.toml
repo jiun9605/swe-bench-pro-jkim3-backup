@@ -7,7 +7,7 @@ workstream = "swe_public_repo"
 description = "Support dynamic MessageSpec selection based on MTI during Unpack in moov-io iso8583 Go library"
 authors = [{ name = "Jiun Kim", email = "jkim3@meta.com" }]
 keywords = ["go", "feature", "payments", "iso8583", "parsing"]
-prompt_style = "implicit"
+prompt_style = "explicit"
 task_complexity = "single_skill"
 
 [metadata]
