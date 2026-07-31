@@ -41,7 +41,14 @@ BFC-specific validators typically handle:
 - Prohibited tag absence via helper `checkProhibited< BFC >Tags` returning `fieldError` with `ErrInvalidProperty`
 - Optional mandatory tag presence for some BFCs via `checkMandatory< BFC >Tags` helper (existing examples in CTP, DRW, DRB, DRC validators)
 
-Validators are wired in `validateBusinessFunctionCode()` switch; order of checks within each validator follows existing neighboring BFC implementations.
+For SVC specifically, the mandatory pattern must be BFC-scoped (in `validateServiceMessage`, not in common `mandatoryFields()`/`verify()`) to preserve cross-BFC isolation: BTR/CTR without ServiceMessage must still pass, while SVC without it must fail. Within `validateServiceMessage`, order is whitelist -> mandatory -> prohibited.
+
+Mandatory ServiceMessage enforcement for SVC requires three distinct checks to match hardened test suite:
+1. Nil guard for `fwm.ServiceMessage` pointer with `ErrFieldRequired`
+2. Meaningful LineOne content check: LineOne may contain only whitespace (spaces, tabs). Inclusion rules use whitespace trimming, not empty-string comparison. Trimmed empty must be treated as missing. Populating only LineTwo..LineTwelve does NOT satisfy LineOne requirement.
+3. Delegation to `ServiceMessage.Validate()` for alphanumeric/length rules after presence checks - ensures invalid characters are caught at BFC level. This is the extra check beyond nil+empty that catches cases like invalid special characters.
+
+Validators are wired in `validateBusinessFunctionCode()` switch; order of checks within each validator follows existing neighboring BFC implementations (see CTP `validateCustomerTransferPlus` for mandatory+prohibited ordering reference).
 
 ## Failure Modes
 

@@ -7,7 +7,7 @@ authors = [{ name = "Jiun Kim", email = "jkim3@meta.com" }]
 keywords = ["go", "wire", "fedwire", "validation", "swe-bench-pro", "skills"]
 format = "swe_bench_single_turn"
 workstream = "swe_public_repo"
-prompt_style = "implicit"
+prompt_style = "explicit"
 task_complexity = "single_skill"
 
 [metadata]
