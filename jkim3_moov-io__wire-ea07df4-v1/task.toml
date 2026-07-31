@@ -7,7 +7,7 @@ authors = [{ name = "Jiun Kim", email = "jkim3@meta.com" }]
 keywords = ["go", "wire", "fedwire", "validation", "swe-bench-pro", "skills"]
 format = "swe_bench_single_turn"
 workstream = "swe_public_repo"
-prompt_style = "explicit"
+prompt_style = "implicit"
 task_complexity = "single_skill"
 
 [metadata]
@@ -50,35 +50,35 @@ name = "fedwire-imad-rules"
 path = "skills/fedwire-imad-rules/SKILL.md"
 source = "authored"
 relationship = "distractor"
-distractor_level = 2
+distractor_level = "2"
 
 [[skills]]
 name = "fedwire-remittance-nesting"
 path = "skills/fedwire-remittance-nesting/SKILL.md"
 source = "authored"
 relationship = "distractor"
-distractor_level = 2
+distractor_level = "2"
 
 [[skills]]
 name = "fedwire-amount-scaling"
 path = "skills/fedwire-amount-scaling/SKILL.md"
 source = "authored"
 relationship = "distractor"
-distractor_level = 2
+distractor_level = "2"
 
 [[skills]]
 name = "fedwire-account-identifier"
 path = "skills/fedwire-account-identifier/SKILL.md"
 source = "authored"
 relationship = "distractor"
-distractor_level = 1
+distractor_level = "1"
 
 [[skills]]
 name = "fedwire-cover-payment"
 path = "skills/fedwire-cover-payment/SKILL.md"
 source = "authored"
 relationship = "distractor"
-distractor_level = 1
+distractor_level = "1"
 
 [verifier.env]
 

@@ -36,19 +36,16 @@ ServiceMessage struct validation in serviceMessage.go checks LineOne presence an
 
 Common mandatory tags (1500 SenderSupplied, 1510 TypeSubType, 1520 IMAD, 2000 Amount, 3100 SenderDI, 3400 ReceiverDI, 3600 BusinessFunctionCode first element) are checked in `mandatoryFields()` regardless of BFC, each via dedicated `validateX()` that checks nil then delegates to tag's `Validate()`.
 
+BFC-specific validators live in fedWireMessage.go and follow the pattern `validate< BFCName >` (e.g., `validateBankTransfer`, `validateCustomerTransfer`, `validateCustomerTransferPlus`, `validateServiceMessage`). They are dispatched from `validateBusinessFunctionCode()` switch on `BusinessFunctionCode.BusinessFunctionCode`.
+
 BFC-specific validators typically handle:
-- TypeSubType whitelist validation via `associatedTypeSubTypes.Contains(TypeCode+SubTypeCode)` returning `NewErrBusinessFunctionCodeProperty` on mismatch
+- TypeSubType whitelist validation via `associatedTypeSubTypes.Contains(TypeCode+SubTypeCode)` returning `NewErrBusinessFunctionCodeProperty` on mismatch. Whitelists are defined in associatedTypeSubTypes.go (`btrTypeSubTypes`, `ctrTypeSubTypes`, `svcTypeSubTypes`, etc.).
 - Prohibited tag absence via helper `checkProhibited< BFC >Tags` returning `fieldError` with `ErrInvalidProperty`
-- Optional mandatory tag presence for some BFCs via `checkMandatory< BFC >Tags` helper (existing examples in CTP, DRW, DRB, DRC validators)
+- Optional mandatory tag presence for some BFCs via `checkMandatory< BFC >Tags` helper. Examples: CTP, DRW, DRB, DRC validators implement mandatory checks for their respective business flows. The helper naming and error construction pattern follows existing validators; reuse `fieldError` with `ErrFieldRequired` for missing required tags.
 
-For SVC specifically, the mandatory pattern must be BFC-scoped (in `validateServiceMessage`, not in common `mandatoryFields()`/`verify()`) to preserve cross-BFC isolation: BTR/CTR without ServiceMessage must still pass, while SVC without it must fail. Within `validateServiceMessage`, order is whitelist -> mandatory -> prohibited.
+General ordering within a BFC validator follows neighboring implementations: TypeSubType whitelist is checked first, then BFC-specific mandatory presence (if any), then prohibited tags. This ordering ensures that fundamental type errors are reported before business-rule violations.
 
-Mandatory ServiceMessage enforcement for SVC requires three distinct checks to match hardened test suite:
-1. Nil guard for `fwm.ServiceMessage` pointer with `ErrFieldRequired`
-2. Meaningful LineOne content check: LineOne may contain only whitespace (spaces, tabs). Inclusion rules use whitespace trimming, not empty-string comparison. Trimmed empty must be treated as missing. Populating only LineTwo..LineTwelve does NOT satisfy LineOne requirement.
-3. Delegation to `ServiceMessage.Validate()` for alphanumeric/length rules after presence checks - ensures invalid characters are caught at BFC level. This is the extra check beyond nil+empty that catches cases like invalid special characters.
-
-Validators are wired in `validateBusinessFunctionCode()` switch; order of checks within each validator follows existing neighboring BFC implementations (see CTP `validateCustomerTransferPlus` for mandatory+prohibited ordering reference).
+Dispatch path is `File.Validate()` -> `fwm.verify()` (common mandatory) -> `validateBusinessFunctionCode()` -> BFC-specific validator. Tests should exercise the full dispatch via `NewFile()` + `AddFEDWireMessage()` + `file.Validate()` rather than calling BFC helpers directly.
 
 ## Failure Modes
 
@@ -61,6 +58,6 @@ Validators are wired in `validateBusinessFunctionCode()` switch; order of checks
 
 ## Testing Strategy
 
-Define test functions in package wire using mock helpers like `mockSenderSupplied()`, `mockTypeSubType()`, `mockBusinessFunctionCode()`, and for SVC specifically `createMockServiceMessageData()` and `mockServiceMessage()` to construct minimal valid FEDWireMessage, then modify specific fields to trigger error conditions. Use `NewFile()` then `file.AddFEDWireMessage(fwm)` then `file.Validate()` to trigger full validation chain including BFC dispatch via `validateBusinessFunctionCode()`.
+Define test functions in package wire using mock helpers like `mockSenderSupplied()`, `mockTypeSubType()`, `mockBusinessFunctionCode()` to construct minimal valid FEDWireMessage, then modify specific fields to trigger error conditions. Use `NewFile()` then `file.AddFEDWireMessage(fwm)` then `file.Validate()` to trigger full validation chain including BFC dispatch via `validateBusinessFunctionCode()`.
 
-For SVC, valid TypeSubType is "1001" (10+01 RequestReversal) per `svcTypeSubTypes` whitelist in associatedTypeSubTypes.go; "1000" (10+00 BasicFundsTransfer) is valid for BTR/CTR but not SVC. Cover TypeSubType valid and invalid paths, prohibited tag presence/absence, and ServiceMessage presence cases. Use `go test -run` for targeted execution and full suite for regression.
+TypeSubType whitelists per BFC are defined in associatedTypeSubTypes.go (e.g., `btrTypeSubTypes`, `ctrTypeSubTypes`, `svcTypeSubTypes`). Each whitelist has a `Contains` method. Valid combinations differ per BFC, so cover both valid and invalid paths for the BFC under test. For prohibited/mandatory coverage, use `go test -run` for targeted execution and full suite for regression.
